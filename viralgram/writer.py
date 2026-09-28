@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 import anthropic
 from pydantic import BaseModel, Field
@@ -137,7 +138,7 @@ class Writer:
         return notes
 
     # ── 3) 카드뉴스 원고 작성 ──────────────────────────────
-    def write(self, story: Story, notes: str) -> CardNews:
+    def _write_once(self, story: Story, notes: str) -> CardNews:
         response = self.client.messages.parse(
             model=self.model,
             max_tokens=16000,
@@ -162,12 +163,46 @@ class Writer:
             raise WriterRefusal("사실 확인이 안 되는 이야기라 건너뜀")
         return card
 
+    def write(self, story: Story, notes: str, attempts: int = 3) -> CardNews:
+        """원고를 쓰고 검사한다. 제목이 깨졌거나 사진 검색어가 비는 등 이상하면 다시 쓴다."""
+        problem = ""
+        for _ in range(attempts):
+            card = self._write_once(story, notes)
+            problem = validate_card(card)
+            if not problem:
+                return card
+            log.warning("원고 검사 실패, 다시 작성: %s", problem)
+        raise WriterRefusal(f"원고 검사 {attempts}회 실패: {problem}")
+
     @staticmethod
     def _check(response) -> None:
         if response.stop_reason == "refusal":
             raise WriterRefusal(getattr(response.stop_details, "explanation", "") or "refusal")
         if response.stop_reason == "max_tokens":
             raise WriterRefusal("응답이 max_tokens 에서 잘림")
+
+
+_HANGUL = re.compile(r"[가-힣]")
+# 한글·영문·숫자·흔한 문장부호만 허용 (이모지 등은 폰트에 없어 네모로 깨진다)
+_ALLOWED = re.compile(r"^[가-힣ㄱ-ㅎa-zA-Z0-9\s'\"‘’“”.,!?·…~%&()\-+:/]+$")
+
+
+def validate_card(card: CardNews) -> str:
+    """문제가 있으면 이유를, 없으면 빈 문자열을 반환."""
+    lines = [line for line in card.headline.split("\n") if line.strip()]
+    if not 1 <= len(lines) <= 3:
+        return f"제목 줄 수 이상 ({len(lines)}줄)"
+    if len(_HANGUL.findall(card.headline)) < 8:
+        return f"제목에 한글이 너무 적음: {card.headline!r}"
+    if not _ALLOWED.match(card.headline):
+        return f"제목에 쓸 수 없는 문자: {card.headline!r}"
+    if len(card.headline) > 60:
+        return "제목이 너무 김"
+    if len(_HANGUL.findall(card.body)) < 30:
+        return "본문이 너무 짧음"
+    if not all(q.strip() for q in card.photo_queries):
+        return "사진 검색어가 비어 있음"
+    return ""
 
 
 def build_caption(card: CardNews, photo_credits: list[str] | None = None, max_hashtags: int = 8) -> str:

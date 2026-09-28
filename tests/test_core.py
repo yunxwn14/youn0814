@@ -6,7 +6,7 @@ from viralgram.cards import Renderer
 from viralgram.photos import Photo
 from viralgram.history import History
 from viralgram.sources import parse_feed
-from viralgram.writer import CardNews, build_caption
+from viralgram.writer import CardNews, build_caption, validate_card
 
 GOOGLE_RSS = """<?xml version="1.0"?><rss version="2.0"><channel><title>Google 뉴스</title>
 <item><title>고양이가 편의점 점장이 됐다 - 연합뉴스</title><link>https://news.google.com/a</link>
@@ -82,3 +82,10 @@ def test_render_cards_with_photos(tmp_path: Path):
 def test_caption_includes_photo_credits():
     caption = build_caption(sample_card(), ["A / Pexels", "A / Pexels", "B / Pexels"])
     assert "사진: A / Pexels, B / Pexels" in caption
+
+
+def test_validate_card_rejects_broken_output():
+    assert validate_card(sample_card()) == ""
+    assert "한글" in validate_card(sample_card().model_copy(update={"headline": '"\U0001f608\ufe0f\U0001f609"'}))
+    assert "문자" in validate_card(sample_card().model_copy(update={"headline": "성묘 갔더니 할머니 산소 앞\n골프 연습 \U0001f3cc"}))
+    assert "검색어" in validate_card(sample_card().model_copy(update={"extra_photo_query": " "}))

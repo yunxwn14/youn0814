@@ -41,7 +41,7 @@ class Instagram:
     def _call(self, method: str, path: str, **params) -> dict:
         params["access_token"] = self.token
         resp = requests.request(method, f"{self.base}/{path}", data=params if method == "POST" else None,
-                                params=params if method == "GET" else None, timeout=60)
+                                params=params if method != "POST" else None, timeout=60)
         data = resp.json()
         if resp.status_code >= 400 or "error" in data:
             raise InstagramError(f"{path}: {data.get('error', data)}")
@@ -87,3 +87,7 @@ class Instagram:
         media = self._call("POST", f"{self.user_id}/media_publish", creation_id=container["id"])
         log.info("게시 완료: media_id=%s", media["id"])
         return media["id"]
+
+    def delete(self, media_id: str) -> None:
+        self._call("DELETE", media_id)
+        log.info("게시물 삭제: media_id=%s", media_id)

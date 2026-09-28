@@ -98,12 +98,8 @@ def _search(query: str, pexels_key: str) -> list[tuple[list[str], str]]:
     return []
 
 
-FALLBACK_QUERIES = ["city", "people", "street", "sky"]
-
-
 def find_photos(queries: list[str], pexels_key: str = "") -> list[Photo | None]:
-    """검색어(=페이지)마다 한 장씩, 같은 사진은 중복 없이. 못 찾은 자리는 None.
-    하나도 못 찾으면 일반적인 검색어로 한 장이라도 확보한다. 예외는 던지지 않는다."""
+    """검색어마다 한 장씩, 같은 사진은 중복 없이. 못 찾은 자리는 None. 예외는 던지지 않는다."""
     used: set[str] = set()
 
     def pick(query: str) -> Photo | None:
@@ -116,11 +112,6 @@ def find_photos(queries: list[str], pexels_key: str = "") -> list[Photo | None]:
                 return Photo(img, credit)
         return None
 
-    photos = [pick(q) for q in queries]
-    if not any(photos):
-        for q in FALLBACK_QUERIES:
-            if (p := pick(q)) is not None:
-                photos = [p]
-                break
+    photos = [pick(q) for q in queries if q.strip()]
     log.info("사진 %d장 확보 (페이지 %d개)", sum(1 for p in photos if p), len(queries))
     return photos
