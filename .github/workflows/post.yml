@@ -47,6 +47,7 @@ jobs:
           IG_GRAPH_HOST: ${{ vars.IG_GRAPH_HOST }}
           IMAGE_HOST: ${{ vars.IMAGE_HOST || 'imgbb' }}
           IMGBB_API_KEY: ${{ secrets.IMGBB_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRAND_HANDLE: ${{ vars.BRAND_HANDLE }}
           FONT_PATH: fonts/NotoSansKR.ttf

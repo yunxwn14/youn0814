@@ -38,6 +38,10 @@ class CardNews(BaseModel):
     caption: str = Field(description="인스타 캡션 본문 (해시태그·출처 표기 제외), 줄바꿈 포함 300~600자")
     hashtags: list[str] = Field(description="'#'으로 시작하는 해시태그 10~20개, 한국어 위주")
     source_credit: str = Field(description="출처 표기, 예: '출처: BBC, 연합뉴스'")
+    photo_queries: list[str] = Field(
+        description="무료 사진 사이트에서 검색할 영어 키워드 3개. 실존 인물 이름 없이 장면·사물·분위기로 "
+        "(예: 'message in a bottle on beach', 'golden retriever portrait'). 첫 번째가 표지용"
+    )
 
 
 SYSTEM = """당신은 한국 인스타그램 '썰/이슈' 카드뉴스 계정의 에디터입니다.
@@ -158,7 +162,7 @@ class Writer:
             raise WriterRefusal("응답이 max_tokens 에서 잘림")
 
 
-def build_caption(card: CardNews, max_hashtags: int = 25) -> str:
+def build_caption(card: CardNews, photo_credits: list[str] | None = None, max_hashtags: int = 25) -> str:
     """인스타 캡션: 본문 + 출처 + 해시태그 (2,200자·해시태그 30개 제한 준수)."""
     tags = []
     for tag in card.hashtags:
@@ -169,5 +173,7 @@ def build_caption(card: CardNews, max_hashtags: int = 25) -> str:
     body, credit = card.caption.strip(), card.source_credit.strip()
     if credit and credit not in body:
         body = f"{body}\n\n{credit}"
+    if photo_credits:
+        body += "\n사진: " + ", ".join(dict.fromkeys(photo_credits))
     caption = f"{body}\n\n{' '.join(tags)}"
     return caption[:2200]

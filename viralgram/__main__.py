@@ -12,6 +12,7 @@ from .config import Settings
 from .history import History
 from .hosting import upload_all
 from .instagram import Instagram
+from .photos import find_photos
 from .sources import fetch_candidates
 from .writer import Writer, WriterRefusal, build_caption
 
@@ -44,8 +45,10 @@ def run(dry_run: bool) -> int:
 
     folder = datetime.now().strftime("%Y%m%d-%H%M%S")
     out_dir = s.output_dir / folder
-    images = Renderer(s.font_path, s.brand_handle, theme_index=len(history.entries)).render(card, story.region, out_dir)
-    caption = build_caption(card)
+    photos = find_photos(card.photo_queries, s.pexels_api_key)
+    renderer = Renderer(s.font_path, s.brand_handle, theme_index=len(history.entries))
+    images = renderer.render(card, story.region, out_dir, photos)
+    caption = build_caption(card, [p.credit for p in photos])
     (out_dir / "caption.txt").write_text(caption, encoding="utf-8")
 
     if dry_run:

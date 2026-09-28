@@ -3,6 +3,7 @@ from pathlib import Path
 from PIL import Image
 
 from viralgram.cards import Renderer
+from viralgram.photos import Photo
 from viralgram.history import History
 from viralgram.sources import parse_feed
 from viralgram.writer import CardNews, Slide, build_caption
@@ -28,6 +29,7 @@ def sample_card() -> CardNews:
         caption="고양이 한 마리가 동네 편의점을 바꿔놓았습니다.\n\n자세한 이야기는 카드에서!",
         hashtags=["#고양이", "편의점", "#고양이", "#훈훈한 이야기"],
         source_credit="출처: 연합뉴스",
+        photo_queries=["cat convenience store", "cat portrait"],
     )
 
 
@@ -67,3 +69,20 @@ def test_instagram_host_detection():
     from viralgram.instagram import Instagram
     assert Instagram.host_for("IGAAxxxx") == "graph.instagram.com"
     assert Instagram.host_for("EAAGxxxx") == "graph.facebook.com"
+
+
+def fake_photo(seed: int) -> Photo:
+    img = Image.radial_gradient("L").resize((1200, 900)).convert("RGB")
+    return Photo(Image.merge("RGB", [c.point(lambda v, k=k: (v + seed * 60 * (k + 1)) % 256) for k, c in enumerate(img.split())]), f"Tester{seed} / Pexels")
+
+
+def test_render_cards_with_photos(tmp_path: Path):
+    photos = [fake_photo(i) for i in range(3)]
+    paths = Renderer("fonts/NotoSansKR.ttf", "@viral_story").render(sample_card(), "해외", tmp_path, photos)
+    assert len(paths) == 5
+    assert all(Image.open(p).size == (1080, 1350) for p in paths)
+
+
+def test_caption_includes_photo_credits():
+    caption = build_caption(sample_card(), ["A / Pexels", "A / Pexels", "B / Pexels"])
+    assert "사진: A / Pexels, B / Pexels" in caption

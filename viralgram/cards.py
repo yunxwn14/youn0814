@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
+from .photos import Photo
 from .writer import CardNews
 
 log = logging.getLogger(__name__)
@@ -86,17 +87,35 @@ class Renderer:
             y += line_h
         return y
 
-    def _base(self, page: int, total: int) -> tuple[Image.Image, ImageDraw.ImageDraw]:
-        img = Image.new("RGB", (W, H), self.bg)
+    def _base(self, page: int, total: int, background: Image.Image | None = None,
+              footer_color: str | None = None) -> tuple[Image.Image, ImageDraw.ImageDraw]:
+        img = background if background is not None else Image.new("RGB", (W, H), self.bg)
         draw = ImageDraw.Draw(img)
         small = self.font(30, "Medium")
+        color = footer_color or self.fg
         if self.brand:
-            draw.text((MARGIN, H - MARGIN), self.brand, font=small, fill=self.fg, anchor="ls")
-        draw.text((W - MARGIN, H - MARGIN), f"{page}/{total}", font=small, fill=self.fg, anchor="rs")
+            draw.text((MARGIN, H - MARGIN), self.brand, font=small, fill=color, anchor="ls")
+        draw.text((W - MARGIN, H - MARGIN), f"{page}/{total}", font=small, fill=color, anchor="rs")
         return img, draw
 
+    def _text_height(self, draw, text, font, max_width, spacing=1.35) -> int:
+        return len(self.wrap(draw, text, font, max_width)) * int(font.size * spacing)
+
+    @staticmethod
+    def _photo_background(photo: Image.Image) -> Image.Image:
+        """사진을 꽉 채우고, 아래쪽으로 갈수록 어두워지는 그라데이션을 덮어 글씨가 잘 보이게 한다."""
+        img = ImageOps.fit(photo, (W, H), Image.LANCZOS)
+        shade = Image.new("L", (1, H))
+        for y in range(H):
+            t = y / H
+            shade.putpixel((0, y), int(60 + 180 * max(0.0, (t - 0.25) / 0.75) ** 1.2))
+        black = Image.new("RGB", (W, H), "#000000")
+        return Image.composite(black, img, shade.resize((W, H)))
+
     # ── 페이지별 레이아웃 ─────────────────────────────────
-    def cover(self, card: CardNews, region: str, total: int) -> Image.Image:
+    def cover(self, card: CardNews, region: str, total: int, photo: Photo | None = None) -> Image.Image:
+        if photo:
+            return self._photo_cover(card, region, total, photo)
         img, draw = self._base(1, total)
         tag_font = self.font(36)
         label = f" {region} 화제 "
@@ -110,11 +129,46 @@ class Renderer:
                   fill=self.accent, anchor="rs")
         return img
 
-    def slide(self, heading: str, body: str, page: int, total: int) -> Image.Image:
+    def _photo_cover(self, card: CardNews, region: str, total: int, photo: Photo) -> Image.Image:
+        white = "#FFFFFF"
+        img, draw = self._base(1, total, self._photo_background(photo.image), white)
+        width = W - 2 * MARGIN
+        hook_font, sub_font = self.font(88, "Black"), self.font(42, "Medium")
+        block = (60 + 40 + self._text_height(draw, card.hook, hook_font, width, 1.25)
+                 + 70 + self._text_height(draw, card.subtitle, sub_font, width))
+        y = H - MARGIN - 130 - block
+        tag_font = self.font(36)
+        label = f" {region} 화제 "
+        tw = draw.textlength(label, font=tag_font)
+        draw.rounded_rectangle((MARGIN, y, MARGIN + tw + 16, y + 60), radius=12, fill=self.accent)
+        draw.text((MARGIN + 8, y + 30), label, font=tag_font, fill="#111111", anchor="lm")
+        y = self._text_block(draw, (MARGIN, y + 100), card.hook, hook_font, white, width, 1.25)
+        draw.rectangle((MARGIN, y + 20, MARGIN + 120, y + 32), fill=self.accent)
+        self._text_block(draw, (MARGIN, y + 70), card.subtitle, sub_font, white, width)
+        draw.text((W - MARGIN, H - MARGIN - 70), "옆으로 넘겨보세요 →", font=self.font(34, "Medium"),
+                  fill=self.accent, anchor="rs")
+        return img
+
+    def slide(self, heading: str, body: str, page: int, total: int, photo: Photo | None = None) -> Image.Image:
+        if photo:
+            return self._photo_slide(heading, body, page, total, photo)
         img, draw = self._base(page, total)
         draw.text((MARGIN, 220), f"{page - 1:02d}", font=self.font(120, "Black"), fill=self.accent)
         y = self._text_block(draw, (MARGIN, 400), heading, self.font(70, "Black"), self.fg, W - 2 * MARGIN, 1.25)
         self._text_block(draw, (MARGIN, y + 60), body, self.font(50, "Regular"), self.fg, W - 2 * MARGIN, 1.6)
+        return img
+
+    def _photo_slide(self, heading: str, body: str, page: int, total: int, photo: Photo) -> Image.Image:
+        """위쪽 절반은 사진, 아래쪽은 글."""
+        img, draw = self._base(page, total)
+        img.paste(ImageOps.fit(photo.image, (W, 600), Image.LANCZOS), (0, 0))
+        num_font = self.font(48, "Black")
+        label = f"{page - 1:02d}"
+        box_w = draw.textlength(label, font=num_font) + 48
+        draw.rectangle((MARGIN, 600 - 40, MARGIN + box_w, 600 + 40), fill=self.accent)
+        draw.text((MARGIN + box_w / 2, 600), label, font=num_font, fill=self.bg, anchor="mm")
+        y = self._text_block(draw, (MARGIN, 690), heading, self.font(64, "Black"), self.fg, W - 2 * MARGIN, 1.25)
+        self._text_block(draw, (MARGIN, y + 36), body, self.font(44, "Regular"), self.fg, W - 2 * MARGIN, 1.55)
         return img
 
     def closing(self, card: CardNews, total: int) -> Image.Image:
@@ -125,11 +179,15 @@ class Renderer:
         self._text_block(draw, (MARGIN, H - 300), card.source_credit, self.font(32, "Regular"), self.fg, W - 2 * MARGIN)
         return img
 
-    def render(self, card: CardNews, region: str, out_dir: Path) -> list[Path]:
+    def render(self, card: CardNews, region: str, out_dir: Path, photos: list[Photo] | None = None) -> list[Path]:
+        """photos[0] 은 표지 배경, 나머지는 본문 슬라이드에 고르게 배치한다."""
         out_dir.mkdir(parents=True, exist_ok=True)
+        photos = photos or []
         total = len(card.slides) + 2
-        pages = [self.cover(card, region, total)]
-        pages += [self.slide(s.heading, s.body, i + 2, total) for i, s in enumerate(card.slides)]
+        pages = [self.cover(card, region, total, photos[0] if photos else None)]
+        extra = photos[1:]
+        slots = {round(k * len(card.slides) / len(extra)): p for k, p in enumerate(extra)} if extra else {}
+        pages += [self.slide(s.heading, s.body, i + 2, total, slots.get(i)) for i, s in enumerate(card.slides)]
         pages.append(self.closing(card, total))
         paths = []
         for i, page in enumerate(pages, 1):

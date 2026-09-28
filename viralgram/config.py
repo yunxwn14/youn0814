@@ -42,6 +42,8 @@ class Settings:
     github_repository: str = ""
     github_image_branch: str = "images"
 
+    pexels_api_key: str = ""
+
     font_path: str = ""
     brand_handle: str = ""
 
@@ -64,6 +66,7 @@ class Settings:
             github_token=env("GITHUB_TOKEN", ""),
             github_repository=env("GITHUB_REPOSITORY", ""),
             github_image_branch=env("GITHUB_IMAGE_BRANCH") or "images",
+            pexels_api_key=env("PEXELS_API_KEY", ""),
             font_path=env("FONT_PATH", ""),
             brand_handle=env("BRAND_HANDLE", ""),
             history_path=Path(env("HISTORY_PATH") or "data/posted.json"),

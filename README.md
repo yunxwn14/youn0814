@@ -14,7 +14,8 @@
 |---|---|
 | `viralgram/sources.py` | 구글 뉴스(국내·해외 키워드), 레딧(r/nottheonion 등) RSS 수집. `DEFAULT_FEEDS` 에서 소스 편집 |
 | `viralgram/writer.py` | Claude API로 후보 선정 → 웹 검색 리서치 → 카드뉴스 원고(구조화 출력) |
-| `viralgram/cards.py` | Pillow로 표지/본문/마무리 카드 렌더링 (테마 5종 순환) |
+| `viralgram/cards.py` | Pillow로 표지/본문/마무리 카드 렌더링 (테마 5종 순환, 사진 있으면 표지 배경·본문 상단에 배치) |
+| `viralgram/photos.py` | 무료 사진 검색 (Pexels 키 있으면 Pexels, 없으면 Openverse CC 사진). 기사 사진은 저작권 때문에 사용 안 함 |
 | `viralgram/hosting.py` | 이미지를 imgbb 또는 GitHub(공개 저장소)에 올려 공개 URL 확보 |
 | `viralgram/instagram.py` | Graph API 캐러셀 게시 (컨테이너 생성 → 처리 대기 → 발행) |
 | `viralgram/history.py` | `data/posted.json` 에 게시 이력 기록 |
@@ -47,6 +48,7 @@ python -m viralgram             # 실제 게시
 저장소 **Settings → Secrets and variables → Actions** 에 등록:
 
 - Secrets: `ANTHROPIC_API_KEY`, `IG_ACCESS_TOKEN`, `IMGBB_API_KEY` (페이스북 로그인 토큰이면 `IG_USER_ID` 도)
+- Secrets(선택): `PEXELS_API_KEY` — [pexels.com/api](https://www.pexels.com/api/) 무료 발급. 넣으면 사진 품질이 좋아짐
 - Variables(선택): `BRAND_HANDLE`(예: `@my_viral_story`), `IMAGE_HOST`, `IG_GRAPH_HOST`
 
 그 후 **Actions → Instagram 자동 게시 → Run workflow** 에서 `dry_run` 체크로 먼저 테스트하세요. 생성된 카드는 실행 결과의 Artifacts 에서 받아볼 수 있습니다. 게시 시간은 `post.yml` 의 `cron` 을 수정하면 됩니다.
@@ -60,7 +62,7 @@ python -m viralgram             # 실제 게시
 
 ## 운영 시 주의
 
-- **저작권**: 원문을 그대로 옮기지 않고 재구성하며 출처를 표기하도록 되어 있지만, 기사 사진은 사용하지 않습니다(텍스트 카드만). 게시 전 dry-run 으로 품질을 확인하는 걸 권장합니다.
+- **저작권**: 원문을 그대로 옮기지 않고 재구성하며 출처를 표기하도록 되어 있지만, 기사 사진은 쓰지 않고 상업적 이용 가능한 무료 사진만 쓰며, 캡션에 사진 출처를 자동 표기합니다. 게시 전 dry-run 으로 품질을 확인하는 걸 권장합니다.
 - **사실 확인**: 웹 검색으로 확인하도록 했지만 AI가 틀릴 수 있습니다. 초기엔 dry-run 결과를 보고 수동 게시하다가 품질이 안정되면 자동화하세요.
 - **인스타 제한**: Graph API 게시는 계정당 24시간 50건 제한. 과도한 자동 게시는 도달률 저하나 제재 원인이 될 수 있어 하루 2~4회를 권장합니다.
 - **레딧 RSS** 는 클라우드 IP에서 차단될 때가 있습니다. 실패한 피드는 건너뛰고 나머지로 진행합니다.
