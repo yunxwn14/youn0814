@@ -71,19 +71,12 @@ def run(dry_run: bool) -> int:
     return 0
 
 
-def delete(media_id: str) -> int:
-    s = Settings.from_env()
-    Instagram(s.ig_user_id, s.ig_access_token, s.ig_graph_host, s.ig_graph_version).delete(media_id)
-    return 0
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="국내/해외 화제 이야기를 인스타그램에 자동 게시")
     parser.add_argument("--dry-run", action="store_true", help="이미지·캡션만 만들고 게시하지 않음")
-    parser.add_argument("--delete", metavar="MEDIA_ID", help="게시물 삭제 (data/posted.json 의 media_id)")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    sys.exit(delete(args.delete) if args.delete else run(args.dry_run))
+    sys.exit(run(args.dry_run))
 
 
 if __name__ == "__main__":

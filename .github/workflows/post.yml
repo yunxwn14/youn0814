@@ -11,10 +11,6 @@ on:
         description: "게시하지 않고 이미지만 생성"
         type: boolean
         default: false
-      delete_media_id:
-        description: "(선택) 이 media_id 게시물을 삭제만 하고 끝냄"
-        type: string
-        default: ""
 
 permissions:
   contents: write
@@ -57,16 +53,10 @@ jobs:
           FONT_PATH: fonts/NotoSansKR.ttf
           # 웹 검색 사실 확인 끄기 (비용 절감). 켜려면 저장소 Variables 에 WEB_RESEARCH=true
           WEB_RESEARCH: ${{ vars.WEB_RESEARCH || 'false' }}
-          DELETE_MEDIA_ID: ${{ inputs.delete_media_id }}
-        run: |
-          if [ -n "$DELETE_MEDIA_ID" ]; then
-            python -m viralgram --delete "$DELETE_MEDIA_ID"
-          else
-            python -m viralgram ${{ inputs.dry_run && '--dry-run' || '' }}
-          fi
+        run: python -m viralgram ${{ inputs.dry_run && '--dry-run' || '' }}
 
       - name: 게시 이력 저장
-        if: success() && !inputs.dry_run && !inputs.delete_media_id
+        if: success() && !inputs.dry_run
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

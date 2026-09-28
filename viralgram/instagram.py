@@ -87,7 +87,3 @@ class Instagram:
         media = self._call("POST", f"{self.user_id}/media_publish", creation_id=container["id"])
         log.info("게시 완료: media_id=%s", media["id"])
         return media["id"]
-
-    def delete(self, media_id: str) -> None:
-        self._call("DELETE", media_id)
-        log.info("게시물 삭제: media_id=%s", media_id)
