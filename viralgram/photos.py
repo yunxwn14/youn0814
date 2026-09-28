@@ -43,7 +43,8 @@ def _search_openverse(query: str) -> list[tuple[list[str], str]]:
     resp = requests.get(
         "https://api.openverse.org/v1/images/",
         headers={"User-Agent": USER_AGENT},
-        params={"q": query, "license_type": "commercial", "page_size": 8, "mature": "false"},
+        # 글씨를 얹는 것도 변형이므로 상업적 이용 + 수정 허용(ND 제외) 라이선스만
+        params={"q": query, "license_type": "commercial,modification", "page_size": 8, "mature": "false"},
         timeout=20,
     )
     resp.raise_for_status()
