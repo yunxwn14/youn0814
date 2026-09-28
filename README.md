@@ -19,7 +19,7 @@
 | `viralgram/hosting.py` | 이미지를 imgbb 또는 GitHub(공개 저장소)에 올려 공개 URL 확보 |
 | `viralgram/instagram.py` | Graph API 캐러셀 게시 (컨테이너 생성 → 처리 대기 → 발행) |
 | `viralgram/history.py` | `data/posted.json` 에 게시 이력 기록 |
-| `.github/workflows/post.yml` | 하루 3회(한국시간 08:57 / 12:27 / 20:57) 자동 실행 |
+| `.github/workflows/post.yml` | 하루 2회(한국시간 12:27 / 20:57) 자동 실행 (웹 검색 사실 확인은 기본 꺼짐) |
 
 ## 1. 준비물
 

@@ -2,8 +2,7 @@ name: Instagram 자동 게시
 
 on:
   schedule:
-    # UTC 기준. 한국시간 08:57 / 12:27 / 20:57 (출근·점심·저녁 피크)
-    - cron: "57 23 * * *"
+    # UTC 기준. 한국시간 12:27 / 20:57 (점심·저녁 피크)
     - cron: "27 3 * * *"
     - cron: "57 11 * * *"
   workflow_dispatch:
@@ -51,6 +50,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRAND_HANDLE: ${{ vars.BRAND_HANDLE }}
           FONT_PATH: fonts/NotoSansKR.ttf
+          # 웹 검색 사실 확인 끄기 (비용 절감). 켜려면 저장소 Variables 에 WEB_RESEARCH=true
+          WEB_RESEARCH: ${{ vars.WEB_RESEARCH || 'false' }}
         run: python -m viralgram ${{ inputs.dry_run && '--dry-run' || '' }}
 
       - name: 게시 이력 저장
