@@ -44,7 +44,8 @@ jobs:
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_GRAPH_HOST: ${{ vars.IG_GRAPH_HOST }}
-          IMAGE_HOST: ${{ vars.IMAGE_HOST || 'imgbb' }}
+          # 인스타 서버가 imgbb(i.ibb.co) 이미지를 못 받아서, 공개 저장소의 images 브랜치에 올려 raw 주소를 쓴다
+          IMAGE_HOST: ${{ vars.IMAGE_HOST || 'github' }}
           IMGBB_API_KEY: ${{ secrets.IMGBB_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
