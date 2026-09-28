@@ -17,6 +17,8 @@ from PIL import Image
 log = logging.getLogger(__name__)
 
 USER_AGENT = "viralgram/1.0 (instagram card news bot)"
+# Flickr 등 원본 호스트는 봇 UA 를 403 으로 막아서, 다운로드는 브라우저 UA 로 한다.
+BROWSER_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36"
 MIN_SIDE = 700
 
 
@@ -26,7 +28,7 @@ class Photo:
     credit: str  # 캡션에 넣을 출처 표기
 
 
-def _search_pexels(query: str, api_key: str) -> list[tuple[str, str]]:
+def _search_pexels(query: str, api_key: str) -> list[tuple[list[str], str]]:
     resp = requests.get(
         "https://api.pexels.com/v1/search",
         headers={"Authorization": api_key},
@@ -34,10 +36,10 @@ def _search_pexels(query: str, api_key: str) -> list[tuple[str, str]]:
         timeout=20,
     )
     resp.raise_for_status()
-    return [(p["src"]["large2x"], f"{p['photographer']} / Pexels") for p in resp.json().get("photos", [])]
+    return [([p["src"]["large2x"]], f"{p['photographer']} / Pexels") for p in resp.json().get("photos", [])]
 
 
-def _search_openverse(query: str) -> list[tuple[str, str]]:
+def _search_openverse(query: str) -> list[tuple[list[str], str]]:
     resp = requests.get(
         "https://api.openverse.org/v1/images/",
         headers={"User-Agent": USER_AGENT},
@@ -51,13 +53,23 @@ def _search_openverse(query: str) -> list[tuple[str, str]]:
         if w and h and min(w, h) < MIN_SIDE:  # 크기 정보가 없으면 받아본 뒤 판단
             continue
         license_ = f"CC {r.get('license', '').upper()}".replace("CC CC0", "CC0")
-        results.append((r["url"], f"{r.get('creator') or 'Unknown'} ({license_}) / Openverse"))
+        # Openverse 가 대신 전달해 주는 원본 크기 이미지를 먼저, 실패하면 원본 주소로
+        urls = [f"{r['thumbnail']}?full_size=true"] if r.get("thumbnail") else []
+        results.append((urls + [r["url"]], f"{r.get('creator') or 'Unknown'} ({license_}) / Openverse"))
     return results
 
 
-def _download(url: str) -> Image.Image | None:
+def _download(urls: list[str]) -> Image.Image | None:
+    for url in urls:
+        img = _download_one(url)
+        if img:
+            return img
+    return None
+
+
+def _download_one(url: str) -> Image.Image | None:
     try:
-        resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=30)
+        resp = requests.get(url, headers={"User-Agent": BROWSER_UA}, timeout=30)
         resp.raise_for_status()
         img = Image.open(io.BytesIO(resp.content)).convert("RGB")
     except (requests.RequestException, OSError) as exc:
@@ -69,7 +81,7 @@ def _download(url: str) -> Image.Image | None:
     return img
 
 
-def _search(query: str, pexels_key: str) -> list[tuple[str, str]]:
+def _search(query: str, pexels_key: str) -> list[tuple[list[str], str]]:
     """결과가 없으면 뒤에서부터 단어를 줄여가며 다시 검색 ('empty fashion runway' → 'empty fashion' → 'empty')."""
     words = query.split()
     for n in range(len(words), 0, -1):
@@ -93,12 +105,12 @@ def find_photos(queries: list[str], pexels_key: str = "", limit: int = 3) -> lis
         if len(photos) >= limit:
             break
         candidates = _search(query, pexels_key)
-        for url, credit in candidates:
-            if url in used:
+        for urls, credit in candidates:
+            if urls[-1] in used:
                 continue
-            img = _download(url)
+            img = _download(urls)
             if img:
-                used.add(url)
+                used.add(urls[-1])
                 photos.append(Photo(img, credit))
                 break
     log.info("사진 %d장 확보", len(photos))
