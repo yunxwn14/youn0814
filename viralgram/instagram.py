@@ -15,12 +15,24 @@ class InstagramError(Exception):
 
 
 class Instagram:
-    def __init__(self, user_id: str, token: str, host: str = "graph.facebook.com", version: str = "v23.0"):
-        if not user_id or not token:
-            raise InstagramError("IG_USER_ID / IG_ACCESS_TOKEN 이 설정되지 않았습니다.")
-        self.user_id = user_id
+    def __init__(self, user_id: str, token: str, host: str = "", version: str = "v23.0"):
+        if not token:
+            raise InstagramError("IG_ACCESS_TOKEN 이 설정되지 않았습니다.")
         self.token = token
-        self.base = f"https://{host}/{version}"
+        self.base = f"https://{host or self.host_for(token)}/{version}"
+        self.user_id = user_id or self._lookup_user_id()
+
+    @staticmethod
+    def host_for(token: str) -> str:
+        """'IG'로 시작하는 토큰은 인스타그램 로그인 방식, 그 외(EAA...)는 페이스북 로그인 방식."""
+        return "graph.instagram.com" if token.startswith("IG") else "graph.facebook.com"
+
+    def _lookup_user_id(self) -> str:
+        if "graph.instagram.com" not in self.base:
+            raise InstagramError("페이스북 로그인 토큰은 IG_USER_ID 를 직접 지정해야 합니다.")
+        me = self._call("GET", "me", fields="user_id,username")
+        log.info("인스타 계정: @%s (id=%s)", me.get("username"), me["user_id"])
+        return me["user_id"]
 
     def _call(self, method: str, path: str, **params) -> dict:
         params["access_token"] = self.token

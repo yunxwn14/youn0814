@@ -26,7 +26,7 @@
 2. **Meta 개발자 앱** — [developers.facebook.com](https://developers.facebook.com) 에서 앱 생성 후 Instagram API 추가
    - 권한: `instagram_basic`, `instagram_content_publish` (페이스북 로그인 방식) 또는 `instagram_business_basic`, `instagram_business_content_publish` (인스타그램 로그인 방식)
    - **장기 액세스 토큰**(60일)과 **인스타그램 사용자 ID** 발급. 토큰은 만료 전 갱신 필요
-   - 인스타그램 로그인 방식 토큰이면 `IG_GRAPH_HOST=graph.instagram.com`
+   - 인스타그램 로그인 방식 토큰(`IGAA...`)이면 접속 주소와 사용자 ID 를 자동으로 찾으므로 토큰만 있으면 됩니다
 3. **Anthropic API 키** — [console.anthropic.com](https://console.anthropic.com)
 4. **이미지 호스팅** — [imgbb API 키](https://api.imgbb.com)(무료) 권장. 또는 이 저장소가 공개라면 `IMAGE_HOST=github`
 
@@ -46,7 +46,7 @@ python -m viralgram             # 실제 게시
 
 저장소 **Settings → Secrets and variables → Actions** 에 등록:
 
-- Secrets: `ANTHROPIC_API_KEY`, `IG_USER_ID`, `IG_ACCESS_TOKEN`, `IMGBB_API_KEY`
+- Secrets: `ANTHROPIC_API_KEY`, `IG_ACCESS_TOKEN`, `IMGBB_API_KEY` (페이스북 로그인 토큰이면 `IG_USER_ID` 도)
 - Variables(선택): `BRAND_HANDLE`(예: `@my_viral_story`), `IMAGE_HOST`, `IG_GRAPH_HOST`
 
 그 후 **Actions → Instagram 자동 게시 → Run workflow** 에서 `dry_run` 체크로 먼저 테스트하세요. 생성된 카드는 실행 결과의 Artifacts 에서 받아볼 수 있습니다. 게시 시간은 `post.yml` 의 `cron` 을 수정하면 됩니다.

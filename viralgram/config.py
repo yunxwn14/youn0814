@@ -33,7 +33,7 @@ class Settings:
 
     ig_user_id: str = ""
     ig_access_token: str = ""
-    ig_graph_host: str = "graph.facebook.com"
+    ig_graph_host: str = ""  # 비우면 토큰 종류로 자동 결정
     ig_graph_version: str = "v23.0"
 
     image_host: str = "imgbb"
@@ -57,7 +57,7 @@ class Settings:
             web_research=_bool("WEB_RESEARCH", True),
             ig_user_id=env("IG_USER_ID", ""),
             ig_access_token=env("IG_ACCESS_TOKEN", ""),
-            ig_graph_host=env("IG_GRAPH_HOST") or "graph.facebook.com",
+            ig_graph_host=env("IG_GRAPH_HOST", ""),
             ig_graph_version=env("IG_GRAPH_VERSION") or "v23.0",
             image_host=(env("IMAGE_HOST") or "imgbb").lower(),
             imgbb_api_key=env("IMGBB_API_KEY", ""),

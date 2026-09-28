@@ -61,3 +61,9 @@ def test_render_cards(tmp_path: Path):
     paths = Renderer("fonts/NotoSansKR.ttf", "@viral_story").render(sample_card(), "국내", tmp_path)
     assert len(paths) == 5
     assert Image.open(paths[0]).size == (1080, 1350)
+
+
+def test_instagram_host_detection():
+    from viralgram.instagram import Instagram
+    assert Instagram.host_for("IGAAxxxx") == "graph.instagram.com"
+    assert Instagram.host_for("EAAGxxxx") == "graph.facebook.com"
