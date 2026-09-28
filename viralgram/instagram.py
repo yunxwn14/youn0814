@@ -1,4 +1,4 @@
-"""Instagram Graph API 로 캐러셀 게시물 발행."""
+"""Instagram Graph API 로 게시물 발행 (1장이면 단일 이미지, 2장 이상이면 캐러셀)."""
 
 from __future__ import annotations
 
@@ -20,7 +20,10 @@ class Instagram:
             raise InstagramError("IG_ACCESS_TOKEN 이 설정되지 않았습니다.")
         self.token = token
         self.base = f"https://{host or self.host_for(token)}/{version}"
+        self.username = ""
         self.user_id = user_id or self._lookup_user_id()
+        if not self.username:
+            self.username = self._call("GET", self.user_id, fields="username").get("username", "")
 
     @staticmethod
     def host_for(token: str) -> str:
@@ -31,7 +34,8 @@ class Instagram:
         if "graph.instagram.com" not in self.base:
             raise InstagramError("페이스북 로그인 토큰은 IG_USER_ID 를 직접 지정해야 합니다.")
         me = self._call("GET", "me", fields="user_id,username")
-        log.info("인스타 계정: @%s (id=%s)", me.get("username"), me["user_id"])
+        self.username = me.get("username", "")
+        log.info("인스타 계정: @%s (id=%s)", self.username, me["user_id"])
         return me["user_id"]
 
     def _call(self, method: str, path: str, **params) -> dict:
@@ -53,6 +57,18 @@ class Instagram:
                 raise InstagramError(f"컨테이너 {container_id} 처리 실패: {status}")
             time.sleep(5)
         raise InstagramError(f"컨테이너 {container_id} 처리 시간 초과")
+
+    def publish(self, image_urls: list[str], caption: str) -> str:
+        if len(image_urls) == 1:
+            return self.publish_image(image_urls[0], caption)
+        return self.publish_carousel(image_urls, caption)
+
+    def publish_image(self, image_url: str, caption: str) -> str:
+        container = self._call("POST", f"{self.user_id}/media", image_url=image_url, caption=caption)
+        self._wait_ready(container["id"])
+        media = self._call("POST", f"{self.user_id}/media_publish", creation_id=container["id"])
+        log.info("게시 완료: media_id=%s", media["id"])
+        return media["id"]
 
     def publish_carousel(self, image_urls: list[str], caption: str) -> str:
         if not 2 <= len(image_urls) <= 10:

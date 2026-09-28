@@ -6,7 +6,7 @@ from viralgram.cards import Renderer
 from viralgram.photos import Photo
 from viralgram.history import History
 from viralgram.sources import parse_feed
-from viralgram.writer import CardNews, Slide, build_caption
+from viralgram.writer import CardNews, build_caption
 
 GOOGLE_RSS = """<?xml version="1.0"?><rss version="2.0"><channel><title>Google 뉴스</title>
 <item><title>고양이가 편의점 점장이 됐다 - 연합뉴스</title><link>https://news.google.com/a</link>
@@ -18,31 +18,17 @@ GOOGLE_RSS = """<?xml version="1.0"?><rss version="2.0"><channel><title>Google �
 def sample_card() -> CardNews:
     return CardNews(
         verified=True,
-        hook="편의점 점장이 된 고양이, 매출이 두 배로?",
-        subtitle="손님들이 줄 서서 기다린다는 그 가게",
-        slides=[
-            Slide(heading="어느 날 나타난 길고양이", body="추운 겨울, 가게 앞에서 떨던 고양이를 점주가 들여보냄.", photo_query="stray cat"),
-            Slide(heading="명예 점장 임명", body="이름표까지 달아줬더니 SNS 에서 입소문 났다고 함. " * 2, photo_query="name tag"),
-            Slide(heading="근데 여기서 반전", body="고양이 보러 오는 손님 덕에 매출이 크게 늘었다고.", photo_query="shop"),
-        ],
-        closing="여러분 동네에도 이런 가게 있음?",
-        caption="고양이 한 마리가 동네 편의점을 바꿔놓음\n\n자세한 건 카드에서",
-        hashtags=["#고양이", "편의점", "#고양이", "#훈훈한 이야기"],
+        headline="실수로 어항 깨자, 싱크대에\n물받아 금붕어 살려준 도둑들",
+        body="영국의 한 가정집에 침입한 절도범들이 깨진 어항 속 금붕어를 싱크대에 옮겨 살려두고 달아났습니다.",
+        hashtags=["#금붕어", "도둑", "#금붕어", "#해외 이슈"],
         source_credit="출처: 연합뉴스",
-        cover_photo_query="cat",
-        closing_photo_query="convenience store",
+        cover_photo_query="goldfish",
+        extra_photo_query="kitchen sink",
     )
 
 
 def test_photo_queries_follow_page_order():
-    assert sample_card().photo_queries == ["cat", "stray cat", "name tag", "shop", "convenience store"]
-
-
-def test_fill_photos_puts_photo_on_every_page():
-    from viralgram.cards import fill_photos
-    a, b = fake_photo(1), fake_photo(2)
-    assert fill_photos([a, None, b, None, None], 5) == [a, a, b, b, a]
-    assert fill_photos([], 3) == [None, None, None]
+    assert sample_card().photo_queries == ["goldfish", "kitchen sink"]
 
 
 def test_parse_feed_splits_source_and_cleans_html():
@@ -62,18 +48,16 @@ def test_history_roundtrip(tmp_path: Path):
 
 def test_caption_dedupes_hashtags_and_limits_length():
     caption = build_caption(sample_card())
-    assert caption.count("#고양이") == 1
-    assert "#훈훈한이야기" in caption and "#편의점" in caption
+    assert caption.startswith("[실수로 어항 깨자, 싱크대에 물받아 금붕어 살려준 도둑들]")
+    assert caption.count("#금붕어") == 1
+    assert "#해외이슈" in caption and "#도둑" in caption
     assert caption.count("출처: 연합뉴스") == 1
-    card = sample_card()
-    card.caption += "\n\n출처: 연합뉴스"
-    assert build_caption(card).count("출처: 연합뉴스") == 1
     assert len(caption) <= 2200
 
 
 def test_render_cards(tmp_path: Path):
-    paths = Renderer("fonts/NotoSansKR.ttf", "@viral_story").render(sample_card(), "국내", tmp_path)
-    assert len(paths) == 5
+    paths = Renderer("fonts/NotoSansKR.ttf", "viral_story").render(sample_card(), tmp_path)
+    assert len(paths) == 1
     assert Image.open(paths[0]).size == (1080, 1350)
 
 
@@ -89,9 +73,9 @@ def fake_photo(seed: int) -> Photo:
 
 
 def test_render_cards_with_photos(tmp_path: Path):
-    photos = [fake_photo(i) for i in range(3)]
-    paths = Renderer("fonts/NotoSansKR.ttf", "@viral_story").render(sample_card(), "해외", tmp_path, photos)
-    assert len(paths) == 5
+    photos = [fake_photo(1), None, fake_photo(2)]
+    paths = Renderer("fonts/NotoSansKR.ttf", "@viral_story").render(sample_card(), tmp_path, photos)
+    assert len(paths) == 2  # 썸네일 + 글씨 없는 사진
     assert all(Image.open(p).size == (1080, 1350) for p in paths)
 
 

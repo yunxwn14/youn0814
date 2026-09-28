@@ -46,8 +46,9 @@ def run(dry_run: bool) -> int:
     folder = datetime.now().strftime("%Y%m%d-%H%M%S")
     out_dir = s.output_dir / folder
     photos = find_photos(card.photo_queries, s.pexels_api_key)
-    renderer = Renderer(s.font_path, s.brand_handle, theme_index=len(history.entries))
-    images = renderer.render(card, story.region, out_dir, photos)
+    ig = Instagram(s.ig_user_id, s.ig_access_token, s.ig_graph_host, s.ig_graph_version) if s.ig_access_token else None
+    brand = s.brand_handle or (ig.username if ig else "")
+    images = Renderer(s.font_path, brand).render(card, out_dir, photos)
     caption = build_caption(card, [p.credit for p in photos if p])
     (out_dir / "caption.txt").write_text(caption, encoding="utf-8")
 
@@ -56,9 +57,11 @@ def run(dry_run: bool) -> int:
         print(caption)
         return 0
 
-    ig = Instagram(s.ig_user_id, s.ig_access_token, s.ig_graph_host, s.ig_graph_version)
+    if ig is None:
+        log.error("IG_ACCESS_TOKEN 이 없어 게시할 수 없습니다.")
+        return 1
     urls = upload_all(images, folder, s)
-    media_id = ig.publish_carousel(urls, caption)
+    media_id = ig.publish(urls, caption)
 
     history.add(story.id, story.title, story.link, media_id)
     history.save()
