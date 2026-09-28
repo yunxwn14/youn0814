@@ -16,6 +16,7 @@ GOOGLE_RSS = """<?xml version="1.0"?><rss version="2.0"><channel><title>Google �
 
 def sample_card() -> CardNews:
     return CardNews(
+        verified=True,
         hook="편의점 점장이 된 고양이, 매출이 두 배로?",
         subtitle="손님들이 줄 서서 기다린다는 그 가게",
         slides=[
@@ -49,7 +50,10 @@ def test_caption_dedupes_hashtags_and_limits_length():
     caption = build_caption(sample_card())
     assert caption.count("#고양이") == 1
     assert "#훈훈한이야기" in caption and "#편의점" in caption
-    assert "출처: 연합뉴스" in caption
+    assert caption.count("출처: 연합뉴스") == 1
+    card = sample_card()
+    card.caption += "\n\n출처: 연합뉴스"
+    assert build_caption(card).count("출처: 연합뉴스") == 1
     assert len(caption) <= 2200
 
 

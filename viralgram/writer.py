@@ -27,11 +27,15 @@ class Slide(BaseModel):
 
 
 class CardNews(BaseModel):
+    verified: bool = Field(
+        description="원문 이야기의 핵심 사실(누가·무엇을·결말)이 리서치 노트에서 신뢰할 만한 매체로 확인되면 true, "
+        "미확인·루머·반박된 내용이면 false"
+    )
     hook: str = Field(description="표지 제목. 스크롤을 멈추게 하는 한 줄, 22자 이내")
     subtitle: str = Field(description="표지 부제, 30자 이내")
     slides: list[Slide] = Field(description="본문 슬라이드 3~6장, 이야기 흐름대로")
     closing: str = Field(description="마지막 장 문구: 댓글을 유도하는 질문, 40자 이내")
-    caption: str = Field(description="인스타 캡션 본문 (해시태그 제외), 줄바꿈 포함 300~600자")
+    caption: str = Field(description="인스타 캡션 본문 (해시태그·출처 표기 제외), 줄바꿈 포함 300~600자")
     hashtags: list[str] = Field(description="'#'으로 시작하는 해시태그 10~20개, 한국어 위주")
     source_credit: str = Field(description="출처 표기, 예: '출처: BBC, 연합뉴스'")
 
@@ -141,6 +145,8 @@ class Writer:
         )
         self._check(response)
         card = response.parsed_output
+        if notes and not card.verified:
+            raise WriterRefusal("사실 확인이 안 되는 이야기라 건너뜀")
         card.slides = card.slides[:MAX_SLIDES]
         return card
 
@@ -160,5 +166,8 @@ def build_caption(card: CardNews, max_hashtags: int = 25) -> str:
         if len(tag) > 1 and tag not in tags:
             tags.append(tag)
     tags = tags[:max_hashtags]
-    caption = f"{card.caption.strip()}\n\n{card.source_credit.strip()}\n\n{' '.join(tags)}"
+    body, credit = card.caption.strip(), card.source_credit.strip()
+    if credit and credit not in body:
+        body = f"{body}\n\n{credit}"
+    caption = f"{body}\n\n{' '.join(tags)}"
     return caption[:2200]
