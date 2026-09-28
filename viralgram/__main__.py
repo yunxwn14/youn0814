@@ -29,7 +29,7 @@ def run(dry_run: bool) -> int:
         return 1
 
     writer = Writer(s.claude_model, web_research=s.web_research)
-    ranked = writer.rank(stories[:60], history.recent_titles())
+    ranked = writer.rank(stories[:100], history.recent_titles())
 
     for story in ranked:
         log.info("작성 중: [%s] %s (%s)", story.region, story.title, story.source)

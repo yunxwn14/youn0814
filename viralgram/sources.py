@@ -27,18 +27,23 @@ def google_news(query: str, lang: str = "ko") -> str:
 DEFAULT_FEEDS: list[tuple[str, str]] = [
     # 국내 — 누리꾼 반응이 뜨겁거나 편이 갈리는 생활 밀착형 이슈 위주
     ("국내", google_news("누리꾼 갑론을박 when:2d")),
-    ("국내", google_news("황당 사연 when:2d")),
+    ("국내", google_news("누리꾼 경악 OR 분노 OR 황당 when:2d")),
+    ("국내", google_news("온라인 커뮤니티 난리 OR 발칵 when:2d")),
     ("국내", google_news("충격 반전 when:2d")),
     ("국내", google_news("역대급 화제 when:2d")),
-    ("국내", google_news("논란 축의금 OR 더치페이 OR 신입사원 OR 결혼식 when:3d")),
-    ("국내", google_news("온라인 커뮤니티 화제 when:2d")),
+    ("국내", google_news("사연 공분 OR 사이다 when:2d")),
+    ("국내", google_news("진상 손님 OR 빌런 OR 무개념 when:3d")),
+    ("국내", google_news("축의금 OR 더치페이 OR 결혼식 논란 when:3d")),
+    ("국내", google_news("신입사원 OR 직장인 OR MZ 논란 when:3d")),
+    ("국내", google_news("연봉 OR 월급 OR 알바 논란 when:3d")),
+    ("국내", google_news("층간소음 OR 주차 OR 배달 논란 when:3d")),
     # 해외
-    ("해외", google_news("sparks debate online when:2d", lang="en")),
+    ("해외", google_news("sparks outrage OR backlash online when:2d", lang="en")),
+    ("해외", google_news("internet divided OR sparks debate when:2d", lang="en")),
     ("해외", google_news("goes viral when:2d", lang="en")),
-    ("해외", google_news("bizarre OR unbelievable when:2d", lang="en")),
+    ("해외", google_news("bizarre OR unbelievable OR shocking when:2d", lang="en")),
+    ("해외", google_news("customer OR boss OR wedding viral story when:3d", lang="en")),
     ("해외", "https://www.reddit.com/r/nottheonion/top/.rss?t=day"),
-    ("해외", "https://www.reddit.com/r/UpliftingNews/top/.rss?t=day"),
-    ("해외", "https://www.reddit.com/r/todayilearned/top/.rss?t=day"),
 ]
 
 
@@ -100,10 +105,10 @@ def parse_feed(region: str, content: bytes | str, limit: int = 15) -> list[Story
 def fetch_candidates(
     feeds: list[tuple[str, str]] | None = None, exclude_ids: set[str] | None = None
 ) -> list[Story]:
-    """모든 피드에서 후보를 모아 중복/이미 게시한 것을 제거해 반환."""
+    """모든 피드에서 후보를 모아 중복/이미 게시한 것을 제거해 반환.
+    앞쪽 피드만 뽑히지 않도록 피드별 1순위, 2순위... 순서로 번갈아 섞는다."""
     exclude_ids = exclude_ids or set()
-    seen: set[str] = set()
-    result: list[Story] = []
+    per_feed: list[list[Story]] = []
     for region, url in feeds or DEFAULT_FEEDS:
         try:
             resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=15)
@@ -111,10 +116,15 @@ def fetch_candidates(
         except requests.RequestException as exc:
             log.warning("피드 수집 실패 (%s): %s", url, exc)
             continue
-        for story in parse_feed(region, resp.content):
-            if story.id in seen or story.id in exclude_ids:
-                continue
-            seen.add(story.id)
-            result.append(story)
+        per_feed.append(parse_feed(region, resp.content))
+    seen: set[str] = set()
+    result: list[Story] = []
+    for rank in range(max((len(f) for f in per_feed), default=0)):
+        for stories in per_feed:
+            if rank < len(stories):
+                story = stories[rank]
+                if story.id not in seen and story.id not in exclude_ids:
+                    seen.add(story.id)
+                    result.append(story)
     log.info("후보 %d건 수집", len(result))
     return result
