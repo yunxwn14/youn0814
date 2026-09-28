@@ -47,7 +47,8 @@ def _search_openverse(query: str) -> list[tuple[str, str]]:
     resp.raise_for_status()
     results = []
     for r in resp.json().get("results", []):
-        if min(r.get("width") or 0, r.get("height") or 0) < MIN_SIDE:
+        w, h = r.get("width"), r.get("height")
+        if w and h and min(w, h) < MIN_SIDE:  # 크기 정보가 없으면 받아본 뒤 판단
             continue
         license_ = f"CC {r.get('license', '').upper()}".replace("CC CC0", "CC0")
         results.append((r["url"], f"{r.get('creator') or 'Unknown'} ({license_}) / Openverse"))
@@ -62,7 +63,10 @@ def _download(url: str) -> Image.Image | None:
     except (requests.RequestException, OSError) as exc:
         log.warning("사진 다운로드 실패 (%s): %s", url, exc)
         return None
-    return img if min(img.size) >= MIN_SIDE else None
+    if min(img.size) < MIN_SIDE:
+        log.info("사진이 너무 작아 제외 (%s, %s)", url, img.size)
+        return None
+    return img
 
 
 def find_photos(queries: list[str], pexels_key: str = "", limit: int = 3) -> list[Photo]:
@@ -77,6 +81,7 @@ def find_photos(queries: list[str], pexels_key: str = "", limit: int = 3) -> lis
         except requests.RequestException as exc:
             log.warning("사진 검색 실패 (%s): %s", query, exc)
             continue
+        log.info("사진 검색 '%s': 후보 %d개", query, len(candidates))
         for url, credit in candidates:
             if url in used:
                 continue
