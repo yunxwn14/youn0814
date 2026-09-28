@@ -25,15 +25,17 @@ def google_news(query: str, lang: str = "ko") -> str:
 
 # (지역, 피드 URL). 필요에 따라 자유롭게 추가/삭제하세요.
 DEFAULT_FEEDS: list[tuple[str, str]] = [
-    # 국내
-    ("국내", google_news("황당 when:2d")),
-    ("국내", google_news("화제 사연 when:2d")),
-    ("국내", google_news("훈훈 미담 when:2d")),
-    ("국내", google_news("이색 when:2d")),
+    # 국내 — 누리꾼 반응이 뜨겁거나 편이 갈리는 생활 밀착형 이슈 위주
+    ("국내", google_news("누리꾼 갑론을박 when:2d")),
+    ("국내", google_news("황당 사연 when:2d")),
+    ("국내", google_news("충격 반전 when:2d")),
+    ("국내", google_news("역대급 화제 when:2d")),
+    ("국내", google_news("논란 축의금 OR 더치페이 OR 신입사원 OR 결혼식 when:3d")),
+    ("국내", google_news("온라인 커뮤니티 화제 when:2d")),
     # 해외
-    ("해외", google_news("weird news when:2d", lang="en")),
-    ("해외", google_news("bizarre OR unusual story when:2d", lang="en")),
-    ("해외", google_news("heartwarming story when:2d", lang="en")),
+    ("해외", google_news("sparks debate online when:2d", lang="en")),
+    ("해외", google_news("goes viral when:2d", lang="en")),
+    ("해외", google_news("bizarre OR unbelievable when:2d", lang="en")),
     ("해외", "https://www.reddit.com/r/nottheonion/top/.rss?t=day"),
     ("해외", "https://www.reddit.com/r/UpliftingNews/top/.rss?t=day"),
     ("해외", "https://www.reddit.com/r/todayilearned/top/.rss?t=day"),

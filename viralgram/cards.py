@@ -43,6 +43,21 @@ def find_font(preferred: str = "") -> str:
     )
 
 
+def fill_photos(photos: list[Photo | None], total: int) -> list[Photo | None]:
+    """페이지 수만큼 사진 목록을 맞춘다. 비어 있는 자리는 확보된 사진을 순서대로 재사용한다."""
+    available = [p for p in photos if p]
+    if not available:
+        return [None] * total
+    result, k = [], 0
+    for i in range(total):
+        p = photos[i] if i < len(photos) else None
+        if p is None:
+            p = available[k % len(available)]
+            k += 1
+        result.append(p)
+    return result
+
+
 class Renderer:
     def __init__(self, font_path: str, brand: str = "", theme_index: int = 0):
         self.font_path = find_font(font_path)
@@ -171,7 +186,9 @@ class Renderer:
         self._text_block(draw, (MARGIN, y + 36), body, self.font(44, "Regular"), self.fg, W - 2 * MARGIN, 1.55)
         return img
 
-    def closing(self, card: CardNews, total: int) -> Image.Image:
+    def closing(self, card: CardNews, total: int, photo: Photo | None = None) -> Image.Image:
+        if photo:
+            return self._photo_closing(card, total, photo)
         img, draw = self._base(total, total)
         y = self._text_block(draw, (MARGIN, 420), card.closing, self.font(76, "Black"), self.accent, W - 2 * MARGIN, 1.3)
         self._text_block(draw, (MARGIN, y + 80), "댓글로 여러분 생각을 알려주세요\n저장하고 친구에게도 공유하기",
@@ -179,16 +196,27 @@ class Renderer:
         self._text_block(draw, (MARGIN, H - 300), card.source_credit, self.font(32, "Regular"), self.fg, W - 2 * MARGIN)
         return img
 
-    def render(self, card: CardNews, region: str, out_dir: Path, photos: list[Photo] | None = None) -> list[Path]:
-        """photos[0] 은 표지 배경, 나머지는 본문 슬라이드에 고르게 배치한다."""
+    def _photo_closing(self, card: CardNews, total: int, photo: Photo) -> Image.Image:
+        white = "#FFFFFF"
+        img, draw = self._base(total, total, self._photo_background(photo.image), white)
+        width = W - 2 * MARGIN
+        q_font, cta_font = self.font(76, "Black"), self.font(42, "Medium")
+        cta = "댓글로 여러분 생각 남겨주세요\n이거 본 친구 태그하기"
+        block = self._text_height(draw, card.closing, q_font, width, 1.3) + 70 + self._text_height(draw, cta, cta_font, width, 1.6)
+        y = H - MARGIN - 190 - block
+        y = self._text_block(draw, (MARGIN, y), card.closing, q_font, self.accent, width, 1.3)
+        self._text_block(draw, (MARGIN, y + 70), cta, cta_font, white, width, 1.6)
+        draw.text((MARGIN, H - MARGIN - 80), card.source_credit, font=self.font(30, "Regular"), fill=white, anchor="ls")
+        return img
+
+    def render(self, card: CardNews, region: str, out_dir: Path, photos: list[Photo | None] | None = None) -> list[Path]:
+        """photos 는 페이지 순서(표지, 본문..., 마지막 장). 빈 자리는 확보된 사진을 돌려 써서 모든 페이지에 사진을 넣는다."""
         out_dir.mkdir(parents=True, exist_ok=True)
-        photos = photos or []
         total = len(card.slides) + 2
-        pages = [self.cover(card, region, total, photos[0] if photos else None)]
-        extra = photos[1:]
-        slots = {round(k * len(card.slides) / len(extra)): p for k, p in enumerate(extra)} if extra else {}
-        pages += [self.slide(s.heading, s.body, i + 2, total, slots.get(i)) for i, s in enumerate(card.slides)]
-        pages.append(self.closing(card, total))
+        page_photos = fill_photos(photos or [], total)
+        pages = [self.cover(card, region, total, page_photos[0])]
+        pages += [self.slide(s.heading, s.body, i + 2, total, page_photos[i + 1]) for i, s in enumerate(card.slides)]
+        pages.append(self.closing(card, total, page_photos[-1]))
         paths = []
         for i, page in enumerate(pages, 1):
             path = out_dir / f"{i:02d}.jpg"

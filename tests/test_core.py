@@ -21,16 +21,28 @@ def sample_card() -> CardNews:
         hook="편의점 점장이 된 고양이, 매출이 두 배로?",
         subtitle="손님들이 줄 서서 기다린다는 그 가게",
         slides=[
-            Slide(heading="어느 날 나타난 길고양이", body="추운 겨울, 가게 앞에서 떨던 고양이를 점주가 들여보냈대요."),
-            Slide(heading="명예 점장 임명", body="이름표까지 달아줬더니 SNS 에서 입소문이 났다고 함. " * 2),
-            Slide(heading="반전 결말", body="지금은 고양이 보러 오는 손님 덕에 매출이 크게 늘었대요."),
+            Slide(heading="어느 날 나타난 길고양이", body="추운 겨울, 가게 앞에서 떨던 고양이를 점주가 들여보냄.", photo_query="stray cat"),
+            Slide(heading="명예 점장 임명", body="이름표까지 달아줬더니 SNS 에서 입소문 났다고 함. " * 2, photo_query="name tag"),
+            Slide(heading="근데 여기서 반전", body="고양이 보러 오는 손님 덕에 매출이 크게 늘었다고.", photo_query="shop"),
         ],
-        closing="여러분 동네에도 이런 가게 있나요?",
-        caption="고양이 한 마리가 동네 편의점을 바꿔놓았습니다.\n\n자세한 이야기는 카드에서!",
+        closing="여러분 동네에도 이런 가게 있음?",
+        caption="고양이 한 마리가 동네 편의점을 바꿔놓음\n\n자세한 건 카드에서",
         hashtags=["#고양이", "편의점", "#고양이", "#훈훈한 이야기"],
         source_credit="출처: 연합뉴스",
-        photo_queries=["cat convenience store", "cat portrait"],
+        cover_photo_query="cat",
+        closing_photo_query="convenience store",
     )
+
+
+def test_photo_queries_follow_page_order():
+    assert sample_card().photo_queries == ["cat", "stray cat", "name tag", "shop", "convenience store"]
+
+
+def test_fill_photos_puts_photo_on_every_page():
+    from viralgram.cards import fill_photos
+    a, b = fake_photo(1), fake_photo(2)
+    assert fill_photos([a, None, b, None, None], 5) == [a, a, b, b, a]
+    assert fill_photos([], 3) == [None, None, None]
 
 
 def test_parse_feed_splits_source_and_cleans_html():

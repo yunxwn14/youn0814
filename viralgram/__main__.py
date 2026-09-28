@@ -48,7 +48,7 @@ def run(dry_run: bool) -> int:
     photos = find_photos(card.photo_queries, s.pexels_api_key)
     renderer = Renderer(s.font_path, s.brand_handle, theme_index=len(history.entries))
     images = renderer.render(card, story.region, out_dir, photos)
-    caption = build_caption(card, [p.credit for p in photos])
+    caption = build_caption(card, [p.credit for p in photos if p])
     (out_dir / "caption.txt").write_text(caption, encoding="utf-8")
 
     if dry_run:
