@@ -69,6 +69,22 @@ def _download(url: str) -> Image.Image | None:
     return img
 
 
+def _search(query: str, pexels_key: str) -> list[tuple[str, str]]:
+    """결과가 없으면 뒤에서부터 단어를 줄여가며 다시 검색 ('empty fashion runway' → 'empty fashion' → 'empty')."""
+    words = query.split()
+    for n in range(len(words), 0, -1):
+        q = " ".join(words[:n]) if n < len(words) else query
+        try:
+            candidates = _search_pexels(q, pexels_key) if pexels_key else _search_openverse(q)
+        except requests.RequestException as exc:
+            log.warning("사진 검색 실패 (%s): %s", q, exc)
+            return []
+        log.info("사진 검색 '%s': 후보 %d개", q, len(candidates))
+        if candidates:
+            return candidates
+    return []
+
+
 def find_photos(queries: list[str], pexels_key: str = "", limit: int = 3) -> list[Photo]:
     """검색어마다 한 장씩, 중복 없이 최대 limit 장. 실패해도 예외 없이 빈 목록을 반환한다."""
     photos: list[Photo] = []
@@ -76,12 +92,7 @@ def find_photos(queries: list[str], pexels_key: str = "", limit: int = 3) -> lis
     for query in queries:
         if len(photos) >= limit:
             break
-        try:
-            candidates = _search_pexels(query, pexels_key) if pexels_key else _search_openverse(query)
-        except requests.RequestException as exc:
-            log.warning("사진 검색 실패 (%s): %s", query, exc)
-            continue
-        log.info("사진 검색 '%s': 후보 %d개", query, len(candidates))
+        candidates = _search(query, pexels_key)
         for url, credit in candidates:
             if url in used:
                 continue

@@ -39,8 +39,8 @@ class CardNews(BaseModel):
     hashtags: list[str] = Field(description="'#'으로 시작하는 해시태그 10~20개, 한국어 위주")
     source_credit: str = Field(description="출처 표기, 예: '출처: BBC, 연합뉴스'")
     photo_queries: list[str] = Field(
-        description="무료 사진 사이트에서 검색할 영어 키워드 3개. 실존 인물 이름 없이 장면·사물·분위기로 "
-        "(예: 'message in a bottle on beach', 'golden retriever portrait'). 첫 번째가 표지용"
+        description="무료 사진 사이트에서 검색할 영어 키워드 3개. 각각 1~2단어의 흔한 명사로, 실존 인물 이름 없이 "
+        "(예: 'runway', 'fashion model', 'golden retriever'). 첫 번째가 표지용"
     )
 
 
