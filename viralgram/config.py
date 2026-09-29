@@ -43,6 +43,8 @@ class Settings:
     github_image_branch: str = "images"
 
     pexels_api_key: str = ""
+    openai_api_key: str = ""  # AI 이미지 생성용 (없으면 AI 이미지 대신 무료 사진)
+    image_model: str = "gpt-image-1"
 
     font_path: str = ""
     brand_handle: str = ""
@@ -68,6 +70,8 @@ class Settings:
             github_repository=env("GITHUB_REPOSITORY", ""),
             github_image_branch=env("GITHUB_IMAGE_BRANCH") or "images",
             pexels_api_key=env("PEXELS_API_KEY", ""),
+            openai_api_key=env("OPENAI_API_KEY", ""),
+            image_model=env("IMAGE_MODEL") or "gpt-image-1",
             font_path=env("FONT_PATH", ""),
             brand_handle=env("BRAND_HANDLE", ""),
             caption_signoff=env("CAPTION_SIGNOFF") or "탐정냥의 사건 보고 끝 🐾",

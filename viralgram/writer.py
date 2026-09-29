@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+from typing import Literal
 
 import anthropic
 from pydantic import BaseModel, Field
@@ -25,6 +26,19 @@ PHOTO_QUERY_DESC = (
 )
 
 
+class ImageSpec(BaseModel):
+    source: Literal["article", "stock", "ai"] = Field(
+        description="article: 원문 기사 대표 이미지(실제 인물·SNS 캡처·현장 사진이 핵심일 때). "
+        "stock: 무료 사진(일반적인 장면·사물). ai: AI 생성(무료 사진으론 표현 안 되는 특정 장면·재현·과거 모습 등)"
+    )
+    stock_query: str = Field(description="무료 사진 검색어 (다른 방법이 실패하면 이걸로 대체). " + PHOTO_QUERY_DESC)
+    ai_prompt: str = Field(
+        description="source 가 ai 일 때 영어 이미지 생성 프롬프트 (사실적인 사진 스타일, 구도·분위기 묘사). "
+        "실존 인물·유명인·정치인·브랜드 로고는 절대 묘사하지 말 것. ai 가 아니면 빈 문자열"
+    )
+    label: str = Field(description="compare 레이아웃일 때 이미지 위에 붙일 짧은 라벨 (예: '1799년', '전', '후'). 아니면 빈 문자열")
+
+
 class CardNews(BaseModel):
     headline: str = Field(
         description="썸네일 제목. 정확히 2줄, 줄 사이는 '\\n'. 각 줄 15자 안팎. 핵심 키워드는 작은따옴표로 강조 "
@@ -33,12 +47,20 @@ class CardNews(BaseModel):
     body: str = Field(description="캡션 본문. 뉴스체 존댓말(~습니다) 2~3문장, 120~250자. 원문에 있는 사실만")
     hashtags: list[str] = Field(description="'#'으로 시작하는 해시태그 3~6개")
     source_credit: str = Field(description="출처 표기, 예: '출처: 연합뉴스'")
-    cover_photo_query: str = Field(description="썸네일 배경용. 이야기 핵심 장면이 떠오르는 사진. " + PHOTO_QUERY_DESC)
-    extra_photo_query: str = Field(description="글씨 없이 두 번째 장에 쓸 사진. " + PHOTO_QUERY_DESC)
+    article_url: str = Field(description="리서치 노트에 나온 원문 기사 URL (없으면 빈 문자열)")
+    layout: Literal["single", "split", "inset", "compare"] = Field(
+        description="썸네일 구성. single: 사진 1장 전면. split: 두 이미지를 좌우로 나란히(닮은꼴·대비·A vs B). "
+        "inset: 메인 사진 + 왼쪽 위 원형 작은 사진(인물+관련 장면, 사연 속 두 요소). "
+        "compare: 위아래 비교(과거 vs 현재, 전 vs 후) + 각 라벨"
+    )
+    image_a: ImageSpec = Field(description="메인 이미지 (split 은 왼쪽, compare 는 위)")
+    image_b: ImageSpec | None = Field(description="두 번째 이미지 (split 오른쪽, inset 원형, compare 아래). single 이면 null")
+    extra_photo_query: str = Field(description="글씨 없이 마지막 장에 쓸 사진. " + PHOTO_QUERY_DESC)
 
     @property
     def photo_queries(self) -> list[str]:
-        return [self.cover_photo_query, self.extra_photo_query]
+        specs = [self.image_a] + ([self.image_b] if self.image_b else [])
+        return [spec.stock_query for spec in specs] + [self.extra_photo_query]
 
 
 SYSTEM = """당신은 한국 인스타그램 이슈 매거진 계정의 에디터입니다.
@@ -51,6 +73,13 @@ SYSTEM = """당신은 한국 인스타그램 이슈 매거진 계정의 에디�
 - 2줄. 핵심 단어는 '작은따옴표'로 강조. 기사 제목처럼 명사·단정형으로 끝냄 ("~화제", "~결국 해고", "~'연구결과'").
 - 좋은 예: "실수로 어항 깨자, 싱크대에\n물받아 금붕어 살려준 도둑들" / "콜센터 직원, 통화 길어지자\n베이컨 구워먹어 결국 해고" / "은행 영업시간 이제 '30분'\n짧아진다, 금융노사 합의완료"
 - 나쁜 예: "며느리에게 양보 종용한\n시어머니" (무엇을 양보하라는지 모름) / "성묘 갔다가\n충격 목격" (무엇을 봤는지 모름)
+
+이미지 구성:
+- 이야기에 가장 어울리고 눈길을 끄는 레이아웃을 고름. 비교·닮은꼴이면 split, 과거/현재·전/후면 compare,
+  인물과 관련 장면을 함께 보여주면 inset, 한 장면이 강렬하면 single.
+- 실제 인물의 발언·SNS 게시물·현장 사진이 핵심이면 article, 일반 장면이면 stock,
+  무료 사진으로 표현 못 하는 특정 장면(재현, 과거 모습, 상상 속 장면)이면 ai.
+- ai 이미지에는 실존 인물·유명인·정치인·브랜드 로고를 넣지 않음 (필요하면 article 사용).
 
 캡션 본문:
 - 담백한 뉴스체 존댓말(~습니다, ~했습니다). 2~3문장으로 무슨 일인지만 전달.
@@ -116,7 +145,7 @@ class Writer:
                 "content": (
                     "다음 기사를 웹에서 찾아 실제로 무슨 일이 있었는지 구체적으로 정리해주세요. 검색은 꼭 필요한 만큼만.\n"
                     "제목이 '이것', '이렇게'처럼 핵심을 숨겼다면 그게 정확히 무엇인지 반드시 밝혀주세요.\n"
-                    "누가/무엇을/얼마나/왜/결말, 사람들 반응, 매체명을 짧은 bullet 로.\n\n"
+                    "누가/무엇을/얼마나/왜/결말, 사람들 반응, 매체명, 원문 기사 URL 을 짧은 bullet 로.\n\n"
                     f"제목: {story.title}\n요약: {story.summary}\n출처: {story.source}\n링크: {story.link}"
                 ),
             }
@@ -205,6 +234,8 @@ def validate_card(card: CardNews) -> str:
         return "본문이 너무 짧음"
     if not all(q.strip() for q in card.photo_queries):
         return "사진 검색어가 비어 있음"
+    if card.layout != "single" and card.image_b is None:
+        return f"{card.layout} 레이아웃인데 두 번째 이미지가 없음"
     return ""
 
 
@@ -221,6 +252,8 @@ def build_caption(card: CardNews, photo_credits: list[str] | None = None, signof
     credit = card.source_credit.strip()
     if photo_credits:
         credit += "\n사진: " + ", ".join(dict.fromkeys(photo_credits))
+        if "AI 생성 이미지" in photo_credits:
+            credit += "\n※ 일부 이미지는 AI로 생성한 이미지입니다."
     parts.append(credit.strip())
     if tags:
         parts.append(" ".join(tags[:max_hashtags]))

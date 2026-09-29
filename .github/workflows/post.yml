@@ -48,6 +48,9 @@ jobs:
           IMAGE_HOST: ${{ vars.IMAGE_HOST || 'github' }}
           IMGBB_API_KEY: ${{ secrets.IMGBB_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          # AI 이미지 생성 (없으면 무료 사진으로 대체)
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          IMAGE_MODEL: ${{ vars.IMAGE_MODEL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRAND_HANDLE: ${{ vars.BRAND_HANDLE }}
           FONT_PATH: fonts/NotoSansKR.ttf

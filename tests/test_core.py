@@ -6,7 +6,7 @@ from viralgram.cards import Renderer
 from viralgram.photos import Photo
 from viralgram.history import History
 from viralgram.sources import parse_feed
-from viralgram.writer import CardNews, build_caption, validate_card
+from viralgram.writer import CardNews, ImageSpec, build_caption, validate_card
 
 GOOGLE_RSS = """<?xml version="1.0"?><rss version="2.0"><channel><title>Google 뉴스</title>
 <item><title>고양이가 편의점 점장이 됐다 - 연합뉴스</title><link>https://news.google.com/a</link>
@@ -21,13 +21,19 @@ def sample_card() -> CardNews:
         body="영국의 한 가정집에 침입한 절도범들이 깨진 어항 속 금붕어를 싱크대에 옮겨 살려두고 달아났습니다.",
         hashtags=["#금붕어", "도둑", "#금붕어", "#해외 이슈"],
         source_credit="출처: 연합뉴스",
-        cover_photo_query="goldfish",
+        article_url="",
+        layout="single",
+        image_a=ImageSpec(source="stock", stock_query="goldfish", ai_prompt="", label=""),
+        image_b=None,
         extra_photo_query="kitchen sink",
     )
 
 
 def test_photo_queries_follow_page_order():
     assert sample_card().photo_queries == ["goldfish", "kitchen sink"]
+    card = sample_card().model_copy(update={"layout": "split", "image_b": ImageSpec(
+        source="ai", stock_query="thief", ai_prompt="a burglar", label="")})
+    assert card.photo_queries == ["goldfish", "thief", "kitchen sink"]
 
 
 def test_parse_feed_splits_source_and_cleans_html():
@@ -55,7 +61,7 @@ def test_caption_dedupes_hashtags_and_limits_length():
 
 
 def test_render_cards(tmp_path: Path):
-    paths = Renderer("fonts/NotoSansKR.ttf", "viral_story").render(sample_card(), tmp_path)
+    paths = Renderer("fonts/NotoSansKR.ttf", "viral_story").render(sample_card(), tmp_path, None)
     assert len(paths) == 1
     assert Image.open(paths[0]).size == (1080, 1350)
 
@@ -72,8 +78,8 @@ def fake_photo(seed: int) -> Photo:
 
 
 def test_render_cards_with_photos(tmp_path: Path):
-    photos = [fake_photo(1), None, fake_photo(2)]
-    paths = Renderer("fonts/NotoSansKR.ttf", "@viral_story").render(sample_card(), tmp_path, photos)
+    paths = Renderer("fonts/NotoSansKR.ttf", "@viral_story").render(
+        sample_card(), tmp_path, fake_photo(1), None, [None, fake_photo(2)])
     assert len(paths) == 2  # 썸네일 + 글씨 없는 사진
     assert all(Image.open(p).size == (1080, 1350) for p in paths)
 
@@ -98,3 +104,27 @@ def test_validate_card_rejects_vague_headline():
 def test_caption_signoff_after_body():
     caption = build_caption(sample_card(), signoff="탐정냥의 사건 보고 끝")
     assert caption.index("탐정냥의 사건 보고 끝") < caption.index("출처: 연합뉴스")
+
+
+def test_render_every_layout(tmp_path: Path):
+    r = Renderer("fonts/NotoSansKR.ttf", "detective_nyang")
+    a, b = fake_photo(1), fake_photo(2)
+    b.ai = True
+    for layout in ["single", "split", "inset", "compare"]:
+        card = sample_card().model_copy(update={
+            "layout": layout,
+            "image_a": ImageSpec(source="stock", stock_query="x", ai_prompt="", label="1799년"),
+            "image_b": ImageSpec(source="ai", stock_query="y", ai_prompt="p", label="2026년"),
+        })
+        paths = r.render(card, tmp_path / layout, a, b)
+        assert Image.open(paths[0]).size == (1080, 1350)
+
+
+def test_validate_requires_second_image_for_multi_layout():
+    card = sample_card().model_copy(update={"layout": "split"})
+    assert "두 번째 이미지" in validate_card(card)
+
+
+def test_caption_marks_ai_images():
+    caption = build_caption(sample_card(), ["AI 생성 이미지", "A / Pexels"])
+    assert "AI로 생성" in caption

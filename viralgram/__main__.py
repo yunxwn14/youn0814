@@ -12,11 +12,27 @@ from .config import Settings
 from .history import History
 from .hosting import upload_all
 from .instagram import Instagram
-from .photos import find_photos
+from .photos import resolve
 from .sources import fetch_candidates
 from .writer import Writer, WriterRefusal, build_caption
 
 log = logging.getLogger("viralgram")
+
+
+def gather_images(card, s: Settings):
+    """레이아웃에 필요한 이미지(a, b)와 마지막 장용 사진(extra)을 확보한다."""
+    used: set[str] = set()
+    source_name = card.source_credit.replace("출처:", "").strip() or "원문 기사"
+    opts = dict(article_url=card.article_url, article_credit=source_name, pexels_key=s.pexels_api_key,
+                openai_key=s.openai_api_key, image_model=s.image_model, used=used)
+    a = resolve(card.image_a, **opts)
+    b = resolve(card.image_b, **opts) if card.image_b and card.layout != "single" else None
+    if card.image_b and card.layout != "single" and b is None:
+        log.info("두 번째 이미지를 못 구해 single 레이아웃으로 대체")
+    extra = resolve(card.image_a.model_copy(update={"source": "stock", "stock_query": card.extra_photo_query}), **opts)
+    log.info("이미지: layout=%s a=%s b=%s extra=%s", card.layout,
+             a and a.credit, b and b.credit, extra and extra.credit)
+    return a, b, extra
 
 
 def run(dry_run: bool) -> int:
@@ -38,8 +54,8 @@ def run(dry_run: bool) -> int:
         except WriterRefusal as exc:
             log.warning("건너뜀 (%s)", exc)
             continue
-        photos = find_photos(card.photo_queries, s.pexels_api_key)
-        if not any(photos):
+        a, b, extra = gather_images(card, s)
+        if a is None:
             log.warning("건너뜀 (이야기에 맞는 사진을 못 찾음: %s)", card.photo_queries)
             continue
         break
@@ -51,8 +67,9 @@ def run(dry_run: bool) -> int:
     out_dir = s.output_dir / folder
     ig = Instagram(s.ig_user_id, s.ig_access_token, s.ig_graph_host, s.ig_graph_version) if s.ig_access_token else None
     brand = s.brand_handle or (ig.username if ig else "")
-    images = Renderer(s.font_path, brand).render(card, out_dir, photos)
-    caption = build_caption(card, [p.credit for p in photos if p], s.caption_signoff)
+    images = Renderer(s.font_path, brand).render(card, out_dir, a, b, [extra])
+    used = [p for p in (a, b, extra) if p]
+    caption = build_caption(card, [p.credit for p in used], s.caption_signoff)
     (out_dir / "caption.txt").write_text(caption, encoding="utf-8")
 
     if dry_run:

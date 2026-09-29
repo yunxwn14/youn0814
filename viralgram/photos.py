@@ -1,15 +1,21 @@
-"""카드에 넣을 무료 사진 검색·다운로드.
+"""썸네일에 넣을 이미지 확보.
 
-기사 사진은 언론사 저작권이 있어 쓰지 않고, 상업적 이용이 가능한 무료 사진만 쓴다.
-- PEXELS_API_KEY 가 있으면 Pexels (출처 표기 의무 없음, 품질 좋음)
-- 없으면 Openverse (키 불필요, CC0/CC BY/CC BY-SA — 출처 표기 필요)
+이미지마다 출처를 고른다 (Claude 가 이야기에 맞춰 지정):
+- article: 원문 기사의 대표 이미지(og:image). 실제 인물·SNS 캡처·현장 사진용
+- ai: 이미지 생성 API (OPENAI_API_KEY 가 있을 때). 무료 사진으로 표현 못 하는 장면용
+- stock: 무료 사진. PEXELS_API_KEY 가 있으면 Pexels, 없으면 Openverse
+article·ai 가 실패하면 stock 으로 대체한다.
 """
 
 from __future__ import annotations
 
+import base64
+import html
 import io
 import logging
+import re
 from dataclasses import dataclass
+from urllib.parse import urljoin
 
 import requests
 from PIL import Image
@@ -26,6 +32,7 @@ MIN_SIDE = 700
 class Photo:
     image: Image.Image
     credit: str  # 캡션에 넣을 출처 표기
+    ai: bool = False  # AI 생성 이미지면 썸네일에 표시한다
 
 
 def _search_pexels(query: str, api_key: str) -> list[tuple[list[str], str]]:
@@ -68,7 +75,7 @@ def _download(urls: list[str]) -> Image.Image | None:
     return None
 
 
-def _download_one(url: str) -> Image.Image | None:
+def _download_one(url: str, min_side: int = MIN_SIDE) -> Image.Image | None:
     try:
         resp = requests.get(url, headers={"User-Agent": BROWSER_UA}, timeout=30)
         resp.raise_for_status()
@@ -76,7 +83,7 @@ def _download_one(url: str) -> Image.Image | None:
     except (requests.RequestException, OSError) as exc:
         log.warning("사진 다운로드 실패 (%s): %s", url, exc)
         return None
-    if min(img.size) < MIN_SIDE:
+    if min(img.size) < min_side:
         log.info("사진이 너무 작아 제외 (%s, %s)", url, img.size)
         return None
     return img
@@ -99,19 +106,84 @@ def _search(query: str, pexels_key: str) -> list[tuple[list[str], str]]:
 
 
 def find_photos(queries: list[str], pexels_key: str = "") -> list[Photo | None]:
-    """검색어마다 한 장씩, 같은 사진은 중복 없이. 못 찾은 자리는 None. 예외는 던지지 않는다."""
+    """검색어마다 무료 사진 한 장씩, 같은 사진은 중복 없이. 못 찾은 자리는 None. 예외는 던지지 않는다."""
     used: set[str] = set()
-
-    def pick(query: str) -> Photo | None:
-        for urls, credit in _search(query, pexels_key):
-            if urls[-1] in used:
-                continue
-            img = _download(urls)
-            if img:
-                used.add(urls[-1])
-                return Photo(img, credit)
-        return None
-
-    photos = [pick(q) for q in queries if q.strip()]
-    log.info("사진 %d장 확보 (페이지 %d개)", sum(1 for p in photos if p), len(queries))
+    photos = [_pick_stock(q, pexels_key, used) for q in queries if q.strip()]
+    log.info("사진 %d장 확보 (검색어 %d개)", sum(1 for p in photos if p), len(queries))
     return photos
+
+
+_OG_IMAGE = re.compile(
+    r"""<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)(?::src)?["'][^>]*content=["']([^"']+)["']"""
+    r"""|<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["'](?:og:image|twitter:image)["']""",
+    re.I,
+)
+
+
+def fetch_article_image(article_url: str, credit: str) -> Photo | None:
+    """원문 기사 페이지의 대표 이미지(og:image)를 가져온다."""
+    if not article_url.startswith("http"):
+        return None
+    try:
+        resp = requests.get(article_url, headers={"User-Agent": BROWSER_UA}, timeout=20)
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        log.warning("기사 페이지 접속 실패 (%s): %s", article_url, exc)
+        return None
+    m = _OG_IMAGE.search(resp.text)
+    if not m:
+        log.info("기사 대표 이미지 없음: %s", article_url)
+        return None
+    img_url = urljoin(resp.url, html.unescape(m.group(1) or m.group(2)))
+    img = _download_one(img_url, min_side=400)
+    return Photo(img, credit) if img else None
+
+
+def generate_ai_image(prompt: str, api_key: str, model: str = "gpt-image-1") -> Photo | None:
+    """OpenAI 이미지 생성 API 로 세로형 이미지를 만든다."""
+    if not (prompt.strip() and api_key):
+        return None
+    try:
+        resp = requests.post(
+            "https://api.openai.com/v1/images/generations",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={"model": model, "prompt": prompt, "size": "1024x1536", "n": 1},
+            timeout=180,
+        )
+        resp.raise_for_status()
+        data = resp.json()["data"][0]
+        raw = base64.b64decode(data["b64_json"]) if data.get("b64_json") else requests.get(data["url"], timeout=60).content
+        img = Image.open(io.BytesIO(raw)).convert("RGB")
+    except (requests.RequestException, KeyError, IndexError, ValueError, OSError) as exc:
+        log.warning("AI 이미지 생성 실패: %s", exc)
+        return None
+    log.info("AI 이미지 생성: %s", prompt[:80])
+    return Photo(img, "AI 생성 이미지", ai=True)
+
+
+def resolve(spec, *, article_url: str, article_credit: str, pexels_key: str,
+            openai_key: str, image_model: str, used: set[str]) -> Photo | None:
+    """ImageSpec 하나를 실제 이미지로. article/ai 가 안 되면 stock 으로 대체."""
+    photo = None
+    if spec.source == "article":
+        photo = fetch_article_image(article_url, article_credit)
+    elif spec.source == "ai":
+        photo = generate_ai_image(spec.ai_prompt, openai_key, image_model)
+    if photo is None:
+        if spec.source != "stock":
+            log.info("%s 이미지 실패 → 무료 사진으로 대체 (%s)", spec.source, spec.stock_query)
+        photo = _pick_stock(spec.stock_query, pexels_key, used)
+    return photo
+
+
+def _pick_stock(query: str, pexels_key: str, used: set[str]) -> Photo | None:
+    if not query.strip():
+        return None
+    for urls, credit in _search(query, pexels_key):
+        if urls[-1] in used:
+            continue
+        img = _download(urls)
+        if img:
+            used.add(urls[-1])
+            return Photo(img, credit)
+    return None
