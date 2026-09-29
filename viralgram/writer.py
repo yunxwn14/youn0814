@@ -27,8 +27,8 @@ PHOTO_QUERY_DESC = (
 
 class CardNews(BaseModel):
     verified: bool = Field(
-        description="원문 이야기의 핵심 사실(누가·무엇을·결말)이 리서치 노트에서 신뢰할 만한 매체로 확인되면 true, "
-        "미확인·루머·반박된 내용이면 false"
+        description="리서치 노트에서 이 기사(또는 같은 내용의 언론 보도)를 찾아 무슨 일인지 구체적으로 파악됐으면 true. "
+        "온라인 커뮤니티 사연이라도 언론이 보도했으면 true. 기사를 못 찾았거나 허위·반박된 내용이면 false"
     )
     headline: str = Field(
         description="썸네일 제목. 정확히 2줄, 줄 사이는 '\\n'. 각 줄 15자 안팎. 핵심 키워드는 작은따옴표로 강조 "
@@ -49,9 +49,12 @@ SYSTEM = """당신은 한국 인스타그램 이슈 매거진 계정의 에디�
 국내외에서 "헐 이게 실화?" 소리가 나오는 이야기를 골라, 썸네일 한 장으로 공유와 댓글을 유도합니다.
 
 썸네일 제목 (가장 중요):
-- 2줄. 짧고 자극적으로, 궁금증·반전·충격이 한눈에 보이게. 핵심 단어는 '작은따옴표'로 강조.
-- 기사 제목처럼 명사·단정형으로 끝냄 ("~화제", "~합의완료", "~결국 해고", "~'연구결과'").
-- 좋은 예: "실수로 어항 깨자, 싱크대에\n물받아 금붕어 살려준 도둑들" / "콜센터 직원, 통화 길어지자\n베이컨 구워먹어 결국 해고"
+- 제목만 읽어도 "누가 / 무엇을 했고 / 어떻게 됐는지"가 한 번에 이해돼야 함. 캡션을 안 읽어도 내용을 알 수 있게.
+- '이것', '이렇게', '그 이유', '충격 행동' 처럼 핵심을 숨기는 표현 금지. 숨기지 말고 구체적 사실(무엇을·얼마를·왜)을 그대로 씀.
+- 자극은 숨김이 아니라 구체적 사실의 대비·반전에서 나옴 (예: 도둑인데 금붕어를 살려줌, 콜센터 직원이 통화 중 베이컨을 구움).
+- 2줄. 핵심 단어는 '작은따옴표'로 강조. 기사 제목처럼 명사·단정형으로 끝냄 ("~화제", "~결국 해고", "~'연구결과'").
+- 좋은 예: "실수로 어항 깨자, 싱크대에\n물받아 금붕어 살려준 도둑들" / "콜센터 직원, 통화 길어지자\n베이컨 구워먹어 결국 해고" / "은행 영업시간 이제 '30분'\n짧아진다, 금융노사 합의완료"
+- 나쁜 예: "며느리에게 양보 종용한\n시어머니" (무엇을 양보하라는지 모름) / "성묘 갔다가\n충격 목격" (무엇을 봤는지 모름)
 
 캡션 본문:
 - 담백한 뉴스체 존댓말(~습니다, ~했습니다). 2~3문장으로 무슨 일인지만 전달.
@@ -110,14 +113,14 @@ class Writer:
     def research(self, story: Story) -> str:
         if not self.web_research:
             return ""
-        tools = [{"type": "web_search_20260209", "name": "web_search", "max_uses": 5}]
+        tools = [{"type": "web_search_20260209", "name": "web_search", "max_uses": 3}]
         messages = [
             {
                 "role": "user",
                 "content": (
-                    "다음 이야기를 웹에서 검색해 사실관계를 확인하고, 카드뉴스에 쓸 핵심 사실을 정리해주세요.\n"
-                    "누가/언제/어디서/무슨 일이/결말, 흥미로운 디테일, 신뢰할 만한 출처 매체명을 bullet 로.\n"
-                    "확인되지 않는 부분은 '미확인'이라고 적어주세요.\n\n"
+                    "다음 기사를 웹에서 찾아 실제로 무슨 일이 있었는지 구체적으로 정리해주세요. 검색은 꼭 필요한 만큼만.\n"
+                    "제목이 '이것', '이렇게'처럼 핵심을 숨겼다면 그게 정확히 무엇인지 반드시 밝혀주세요.\n"
+                    "누가/무엇을/얼마나/왜/결말, 사람들 반응, 매체명을 짧은 bullet 로. 확인 안 되는 부분은 '미확인'.\n\n"
                     f"제목: {story.title}\n요약: {story.summary}\n출처: {story.source}\n링크: {story.link}"
                 ),
             }
@@ -188,6 +191,9 @@ _HANGUL = re.compile(r"[가-힣]")
 _ALLOWED = re.compile(r"^[가-힣ㄱ-ㅎa-zA-Z0-9\s'\"‘’“”.,!?·…~%&()\-+:/]+$")
 
 
+_VAGUE = re.compile(r"이것|이거|이렇게|그것|충격 행동|충격적인 행동|그 이유")
+
+
 def validate_card(card: CardNews) -> str:
     """문제가 있으면 이유를, 없으면 빈 문자열을 반환."""
     lines = [line for line in card.headline.split("\n") if line.strip()]
@@ -199,6 +205,8 @@ def validate_card(card: CardNews) -> str:
         return f"제목에 쓸 수 없는 문자: {card.headline!r}"
     if len(card.headline) > 60:
         return "제목이 너무 김"
+    if _VAGUE.search(card.headline):
+        return f"제목이 핵심을 숨김: {card.headline!r}"
     if len(_HANGUL.findall(card.body)) < 30:
         return "본문이 너무 짧음"
     if not all(q.strip() for q in card.photo_queries):

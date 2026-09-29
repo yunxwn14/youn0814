@@ -51,8 +51,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRAND_HANDLE: ${{ vars.BRAND_HANDLE }}
           FONT_PATH: fonts/NotoSansKR.ttf
-          # 웹 검색 사실 확인 끄기 (비용 절감). 켜려면 저장소 Variables 에 WEB_RESEARCH=true
-          WEB_RESEARCH: ${{ vars.WEB_RESEARCH || 'false' }}
+          # 웹 검색으로 기사 실제 내용 파악 (끄면 제목만 보고 써서 썸네일이 모호해짐). 끄려면 Variables 에 WEB_RESEARCH=false
+          WEB_RESEARCH: ${{ vars.WEB_RESEARCH || 'true' }}
         run: python -m viralgram ${{ inputs.dry_run && '--dry-run' || '' }}
 
       - name: 게시 이력 저장

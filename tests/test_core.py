@@ -89,3 +89,8 @@ def test_validate_card_rejects_broken_output():
     assert "한글" in validate_card(sample_card().model_copy(update={"headline": '"\U0001f608\ufe0f\U0001f609"'}))
     assert "문자" in validate_card(sample_card().model_copy(update={"headline": "성묘 갔더니 할머니 산소 앞\n골프 연습 \U0001f3cc"}))
     assert "검색어" in validate_card(sample_card().model_copy(update={"extra_photo_query": " "}))
+
+
+def test_validate_card_rejects_vague_headline():
+    card = sample_card().model_copy(update={"headline": "1500만원 골드바 내밀며\n며느리에게 '이것' 양보 종용"})
+    assert "숨김" in validate_card(card)
