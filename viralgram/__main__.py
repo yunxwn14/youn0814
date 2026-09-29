@@ -52,7 +52,7 @@ def run(dry_run: bool) -> int:
     ig = Instagram(s.ig_user_id, s.ig_access_token, s.ig_graph_host, s.ig_graph_version) if s.ig_access_token else None
     brand = s.brand_handle or (ig.username if ig else "")
     images = Renderer(s.font_path, brand).render(card, out_dir, photos)
-    caption = build_caption(card, [p.credit for p in photos if p])
+    caption = build_caption(card, [p.credit for p in photos if p], s.caption_signoff)
     (out_dir / "caption.txt").write_text(caption, encoding="utf-8")
 
     if dry_run:

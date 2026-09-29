@@ -208,15 +208,16 @@ def validate_card(card: CardNews) -> str:
     return ""
 
 
-def build_caption(card: CardNews, photo_credits: list[str] | None = None, max_hashtags: int = 8) -> str:
-    """인스타 캡션: [제목] + 본문 + 출처 + 해시태그 (2,200자 제한)."""
+def build_caption(card: CardNews, photo_credits: list[str] | None = None, signoff: str = "",
+                  max_hashtags: int = 8) -> str:
+    """인스타 캡션: [제목] + 본문 + 맺음말 + 출처 + 해시태그 (2,200자 제한)."""
     tags = []
     for tag in card.hashtags:
         tag = "#" + tag.lstrip("#").replace(" ", "")
         if len(tag) > 1 and tag not in tags:
             tags.append(tag)
     title = " ".join(line.strip() for line in card.headline.split("\n") if line.strip())
-    parts = [f"[{title}]", card.body.strip()]
+    parts = [f"[{title}]", card.body.strip(), signoff.strip()]
     credit = card.source_credit.strip()
     if photo_credits:
         credit += "\n사진: " + ", ".join(dict.fromkeys(photo_credits))

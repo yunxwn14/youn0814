@@ -93,3 +93,8 @@ def test_validate_card_rejects_broken_output():
 def test_validate_card_rejects_vague_headline():
     card = sample_card().model_copy(update={"headline": "1500만원 골드바 내밀며\n며느리에게 '이것' 양보 종용"})
     assert "숨김" in validate_card(card)
+
+
+def test_caption_signoff_after_body():
+    caption = build_caption(sample_card(), signoff="탐정냥의 사건 보고 끝")
+    assert caption.index("탐정냥의 사건 보고 끝") < caption.index("출처: 연합뉴스")
