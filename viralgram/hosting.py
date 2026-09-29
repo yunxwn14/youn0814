@@ -58,13 +58,13 @@ def _ensure_branch(api: str, headers: dict, branch: str) -> None:
     ).raise_for_status()
 
 
-def upload_all(paths: list[Path], folder: str, s: Settings) -> list[str]:
+def upload_all(paths: list[Path], folder: str, s: Settings, prefix: str = "posts") -> list[str]:
     urls = []
     for path in paths:
         if s.image_host == "imgbb":
             url = upload_imgbb(path, s.imgbb_api_key)
         elif s.image_host == "github":
-            url = upload_github(path, f"posts/{folder}/{path.name}", s)
+            url = upload_github(path, f"{prefix}/{folder}/{path.name}", s)
         else:
             raise ValueError(f"알 수 없는 IMAGE_HOST: {s.image_host}")
         log.info("업로드: %s", url)

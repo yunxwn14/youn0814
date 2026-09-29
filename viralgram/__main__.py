@@ -74,6 +74,10 @@ def run(dry_run: bool) -> int:
 
     if dry_run:
         print(f"\n[dry-run] 이미지와 캡션을 {out_dir} 에 저장했습니다. 게시하지 않았습니다.\n")
+        if s.image_host == "github" and s.github_token:
+            # 미리보기도 링크로 볼 수 있게 images 브랜치의 previews/ 에 올린다
+            for url in upload_all(images, folder, s, prefix="previews"):
+                print(f"미리보기: {url}")
         print(caption)
         return 0
 
