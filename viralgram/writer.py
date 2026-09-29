@@ -26,10 +26,6 @@ PHOTO_QUERY_DESC = (
 
 
 class CardNews(BaseModel):
-    verified: bool = Field(
-        description="리서치 노트에서 이 기사(또는 같은 내용의 언론 보도)를 찾아 무슨 일인지 구체적으로 파악됐으면 true. "
-        "온라인 커뮤니티 사연이라도 언론이 보도했으면 true. 기사를 못 찾았거나 허위·반박된 내용이면 false"
-    )
     headline: str = Field(
         description="썸네일 제목. 정확히 2줄, 줄 사이는 '\\n'. 각 줄 15자 안팎. 핵심 키워드는 작은따옴표로 강조 "
         "(예: \"은행 영업시간 이제 '30분'\\n짧아진다, 금융노사 합의완료\")"
@@ -120,7 +116,7 @@ class Writer:
                 "content": (
                     "다음 기사를 웹에서 찾아 실제로 무슨 일이 있었는지 구체적으로 정리해주세요. 검색은 꼭 필요한 만큼만.\n"
                     "제목이 '이것', '이렇게'처럼 핵심을 숨겼다면 그게 정확히 무엇인지 반드시 밝혀주세요.\n"
-                    "누가/무엇을/얼마나/왜/결말, 사람들 반응, 매체명을 짧은 bullet 로. 확인 안 되는 부분은 '미확인'.\n\n"
+                    "누가/무엇을/얼마나/왜/결말, 사람들 반응, 매체명을 짧은 bullet 로.\n\n"
                     f"제목: {story.title}\n요약: {story.summary}\n출처: {story.source}\n링크: {story.link}"
                 ),
             }
@@ -163,8 +159,6 @@ class Writer:
         )
         self._check(response)
         card = response.parsed_output
-        if notes and not card.verified:
-            raise WriterRefusal("사실 확인이 안 되는 이야기라 건너뜀")
         return card
 
     def write(self, story: Story, notes: str, attempts: int = 3) -> CardNews:

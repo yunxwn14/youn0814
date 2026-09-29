@@ -17,7 +17,6 @@ GOOGLE_RSS = """<?xml version="1.0"?><rss version="2.0"><channel><title>Google �
 
 def sample_card() -> CardNews:
     return CardNews(
-        verified=True,
         headline="실수로 어항 깨자, 싱크대에\n물받아 금붕어 살려준 도둑들",
         body="영국의 한 가정집에 침입한 절도범들이 깨진 어항 속 금붕어를 싱크대에 옮겨 살려두고 달아났습니다.",
         hashtags=["#금붕어", "도둑", "#금붕어", "#해외 이슈"],
