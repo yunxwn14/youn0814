@@ -2,7 +2,7 @@
 
 이미지마다 출처를 고른다 (Claude 가 이야기에 맞춰 지정):
 - article: 원문 기사의 대표 이미지(og:image). 실제 인물·SNS 캡처·현장 사진용
-- ai: 이미지 생성 API (OPENAI_API_KEY 가 있을 때). 무료 사진으로 표현 못 하는 장면용
+- ai: 이미지 생성. OPENAI_API_KEY 가 있으면 OpenAI, 없으면 무료 Pollinations(키 불필요). 무료 사진으로 표현 못 하는 장면용
 - stock: 무료 사진. PEXELS_API_KEY 가 있으면 Pexels, 없으면 Openverse
 article·ai 가 실패하면 stock 으로 대체한다.
 """
@@ -15,7 +15,8 @@ import io
 import logging
 import re
 from dataclasses import dataclass
-from urllib.parse import urljoin
+import random
+from urllib.parse import quote, urljoin
 
 import requests
 from PIL import Image
@@ -77,7 +78,7 @@ def _download(urls: list[str]) -> Image.Image | None:
 
 def _download_one(url: str, min_side: int = MIN_SIDE) -> Image.Image | None:
     try:
-        resp = requests.get(url, headers={"User-Agent": BROWSER_UA}, timeout=30)
+        resp = requests.get(url, headers={"User-Agent": BROWSER_UA}, timeout=120 if "pollinations" in url else 30)
         resp.raise_for_status()
         img = Image.open(io.BytesIO(resp.content)).convert("RGB")
     except (requests.RequestException, OSError) as exc:
@@ -140,9 +141,28 @@ def fetch_article_image(article_url: str, credit: str) -> Photo | None:
 
 
 def generate_ai_image(prompt: str, api_key: str, model: str = "gpt-image-1") -> Photo | None:
-    """OpenAI 이미지 생성 API 로 세로형 이미지를 만든다."""
-    if not (prompt.strip() and api_key):
+    """세로형 이미지를 생성한다. OpenAI 키가 있으면 OpenAI, 없거나 실패하면 무료 Pollinations."""
+    if not prompt.strip():
         return None
+    if api_key:
+        photo = _generate_openai(prompt, api_key, model)
+        if photo:
+            return photo
+    return _generate_pollinations(prompt)
+
+
+def _generate_pollinations(prompt: str) -> Photo | None:
+    """pollinations.ai 무료 이미지 생성 (가입·키 불필요, 느리거나 실패할 수 있음)."""
+    url = (f"https://image.pollinations.ai/prompt/{quote(prompt)}"
+           f"?width=1024&height=1344&nologo=true&model=flux&seed={random.randint(1, 10**6)}")
+    img = _download_one(url, min_side=700) if prompt else None
+    if img is None:
+        return None
+    log.info("AI 이미지 생성 (Pollinations): %s", prompt[:80])
+    return Photo(img, "AI 생성 이미지", ai=True)
+
+
+def _generate_openai(prompt: str, api_key: str, model: str) -> Photo | None:
     try:
         resp = requests.post(
             "https://api.openai.com/v1/images/generations",
@@ -157,7 +177,7 @@ def generate_ai_image(prompt: str, api_key: str, model: str = "gpt-image-1") -> 
     except (requests.RequestException, KeyError, IndexError, ValueError, OSError) as exc:
         log.warning("AI 이미지 생성 실패: %s", exc)
         return None
-    log.info("AI 이미지 생성: %s", prompt[:80])
+    log.info("AI 이미지 생성 (OpenAI): %s", prompt[:80])
     return Photo(img, "AI 생성 이미지", ai=True)
 
 
