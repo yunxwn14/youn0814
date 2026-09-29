@@ -32,6 +32,16 @@ def vertical_frame(src: Path, dst: Path) -> Path:
     return dst
 
 
+def _zoom_frames(frame: Image.Image, n: int, zoom_to: float = 1.06):
+    """가운데 기준으로 천천히 확대되는 프레임들.
+    ffmpeg zoompan 은 위치를 정수 픽셀로 반올림해 화면이 떨리므로, 소수점 좌표로 잘라 확대한다."""
+    for i in range(n):
+        z = 1 + (zoom_to - 1) * (i / max(n - 1, 1))
+        w, h = W / z, H / z
+        x0, y0 = (W - w) / 2, (H - h) / 2
+        yield frame.resize((W, H), Image.BICUBIC, box=(x0, y0, x0 + w, y0 + h))
+
+
 def make_reel(pages: list[Path], out: Path) -> Path:
     """이미지들을 순서대로 이어 붙인 MP4 를 만든다 (무음 오디오 트랙 포함)."""
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -39,30 +49,24 @@ def make_reel(pages: list[Path], out: Path) -> Path:
     durations = [FIRST_SECONDS] + [OTHER_SECONDS] * (len(frames) - 1)
     total = sum(durations)
 
-    cmd = [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error"]
-    for frame in frames:
-        cmd += ["-i", str(frame)]
-    cmd += ["-f", "lavfi", "-t", f"{total}", "-i", "anullsrc=r=44100:cl=stereo"]
-
-    filters, labels = [], []
-    for i, seconds in enumerate(durations):
-        n = int(seconds * FPS)
-        # 살짝 크게 키운 뒤 가운데 기준으로 천천히 확대 (켄 번즈 효과)
-        filters.append(
-            f"[{i}:v]scale={int(W * 1.1)}:{int(H * 1.1)},"
-            f"zoompan=z='min(zoom+0.0007,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-            f":d={n}:s={W}x{H}:fps={FPS},setsar=1[v{i}]"
-        )
-        labels.append(f"[v{i}]")
-    filters.append(f"{''.join(labels)}concat=n={len(frames)}:v=1:a=0,format=yuv420p[v]")
-
-    cmd += [
-        "-filter_complex", ";".join(filters),
-        "-map", "[v]", "-map", f"{len(frames)}:a",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-r", str(FPS),
+    cmd = [
+        imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error",
+        "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
+        "-f", "lavfi", "-t", f"{total}", "-i", "anullsrc=r=44100:cl=stereo",
+        "-map", "0:v", "-map", "1:a",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart",
         str(out),
     ]
-    subprocess.run(cmd, check=True)
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+    try:
+        for frame_path, seconds in zip(frames, durations):
+            base = Image.open(frame_path).convert("RGB")
+            for img in _zoom_frames(base, int(seconds * FPS)):
+                proc.stdin.write(img.tobytes())
+    finally:
+        proc.stdin.close()
+    if proc.wait() != 0:
+        raise RuntimeError("ffmpeg 영상 인코딩 실패")
     log.info("릴스 영상 생성: %s (%.1f초)", out, total)
     return out
