@@ -121,9 +121,15 @@ _OG_IMAGE = re.compile(
 )
 
 
-def fetch_article_image(article_url: str, credit: str) -> Photo | None:
-    """원문 기사 페이지의 대표 이미지(og:image)를 가져온다."""
-    if not article_url.startswith("http"):
+def fetch_article_image(article_url: str | list[str], credit: str) -> Photo | None:
+    """원문 기사 페이지의 대표 이미지(og:image)를 가져온다. 주소 목록이면 성공할 때까지 차례로 시도."""
+    if isinstance(article_url, list):
+        for url in article_url[:6]:
+            photo = fetch_article_image(url, credit)
+            if photo:
+                return photo
+        return None
+    if not article_url.startswith("http") or "news.google." in article_url:
         return None
     try:
         resp = requests.get(article_url, headers={"User-Agent": BROWSER_UA}, timeout=20)
@@ -181,7 +187,7 @@ def _generate_openai(prompt: str, api_key: str, model: str) -> Photo | None:
     return Photo(img, "AI 생성 이미지", ai=True)
 
 
-def resolve(spec, *, article_url: str, article_credit: str, pexels_key: str,
+def resolve(spec, *, article_url: str | list[str], article_credit: str, pexels_key: str,
             openai_key: str, image_model: str, used: set[str]) -> Photo | None:
     """ImageSpec 하나를 실제 이미지로. article/ai 가 안 되면 stock 으로 대체."""
     photo = None

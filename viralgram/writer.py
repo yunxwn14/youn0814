@@ -47,7 +47,7 @@ class CardNews(BaseModel):
     body: str = Field(description="캡션 본문. 뉴스체 존댓말(~습니다) 2~3문장, 120~250자. 원문에 있는 사실만")
     hashtags: list[str] = Field(description="'#'으로 시작하는 해시태그 3~6개")
     source_credit: str = Field(description="출처 표기, 예: '출처: 연합뉴스'")
-    article_url: str = Field(description="리서치 노트에 나온 원문 기사 URL (없으면 빈 문자열)")
+    article_url: str = Field(description="리서치 노트에 나온 언론사 원문 기사 URL (news.google.com 링크는 쓰지 말 것, 없으면 빈 문자열)")
     layout: Literal["single", "split", "inset", "compare"] = Field(
         description="썸네일 구성. single: 사진 1장 전면. split: 두 이미지를 좌우로 나란히(닮은꼴·대비·A vs B). "
         "inset: 메인 사진 + 왼쪽 위 원형 작은 사진(인물+관련 장면, 사연 속 두 요소). "
@@ -60,7 +60,7 @@ class CardNews(BaseModel):
     @property
     def photo_queries(self) -> list[str]:
         specs = [self.image_a] + ([self.image_b] if self.image_b else [])
-        return [spec.stock_query for spec in specs] + [self.extra_photo_query]
+        return [q for q in [spec.stock_query for spec in specs] + [self.extra_photo_query] if q.strip()]
 
 
 SYSTEM = """당신은 한국 인스타그램 이슈 매거진 계정의 에디터입니다.
@@ -92,6 +92,21 @@ SYSTEM = """당신은 한국 인스타그램 이슈 매거진 계정의 에디�
 - "확인된 건 여기까지" 같은 취재 과정·정보 부족 언급은 쓰지 않습니다."""
 
 
+def _search_result_urls(turns) -> list[str]:
+    """웹 검색 결과 블록에서 기사 주소를 순서대로 모은다 (구글 뉴스 등 중계 주소 제외)."""
+    urls: list[str] = []
+    for turn in turns:
+        for block in turn["content"] if isinstance(turn["content"], list) else []:
+            if getattr(block, "type", "") != "web_search_tool_result":
+                continue
+            results = block.content if isinstance(block.content, list) else []
+            for r in results:
+                url = getattr(r, "url", "")
+                if url and "news.google." not in url and url not in urls:
+                    urls.append(url)
+    return urls
+
+
 class WriterRefusal(Exception):
     pass
 
@@ -101,6 +116,7 @@ class Writer:
         self.client = anthropic.Anthropic()
         self.model = model
         self.web_research = web_research
+        self.source_urls: list[str] = []  # 마지막 리서치에서 웹 검색으로 찾은 기사 주소들 (기사 사진용)
 
     # ── 1) 후보 선정 ─────────────────────────────────────
     def rank(self, stories: list[Story], recent_titles: list[str]) -> list[Story]:
@@ -137,6 +153,7 @@ class Writer:
 
     # ── 2) 웹 검색으로 사실 확인/보강 ───────────────────────
     def research(self, story: Story) -> str:
+        self.source_urls = []
         if not self.web_research:
             return ""
         tools = [{"type": "web_search_20260209", "name": "web_search", "max_uses": 3}]
@@ -164,6 +181,7 @@ class Writer:
             messages = [messages[0], {"role": "assistant", "content": response.content}]
         self._check(response)
         notes = "\n".join(b.text for b in response.content if b.type == "text").strip()
+        self.source_urls = _search_result_urls(messages[1:] + [{"content": response.content}])
         log.info("리서치 노트 %d자", len(notes))
         return notes
 
@@ -233,7 +251,7 @@ def validate_card(card: CardNews) -> str:
         return f"제목이 핵심을 숨김: {card.headline!r}"
     if len(_HANGUL.findall(card.body)) < 30:
         return "본문이 너무 짧음"
-    if not all(q.strip() for q in card.photo_queries):
+    if not (card.image_a.stock_query.strip() and card.extra_photo_query.strip()):
         return "사진 검색어가 비어 있음"
     if card.layout != "single" and card.image_b is None:
         return f"{card.layout} 레이아웃인데 두 번째 이미지가 없음"

@@ -20,11 +20,12 @@ from .writer import Writer, WriterRefusal, build_caption
 log = logging.getLogger("viralgram")
 
 
-def gather_images(card, s: Settings):
+def gather_images(card, s: Settings, source_urls: list[str] | None = None):
     """레이아웃에 필요한 이미지(a, b)와 마지막 장용 사진(extra)을 확보한다."""
     used: set[str] = set()
     source_name = card.source_credit.replace("출처:", "").strip() or "원문 기사"
-    opts = dict(article_url=card.article_url, article_credit=source_name, pexels_key=s.pexels_api_key,
+    article_urls = list(dict.fromkeys([card.article_url, *(source_urls or [])]))
+    opts = dict(article_url=article_urls, article_credit=source_name, pexels_key=s.pexels_api_key,
                 openai_key=s.openai_api_key, image_model=s.image_model, used=used)
     a = resolve(card.image_a, **opts)
     b = resolve(card.image_b, **opts) if card.image_b and card.layout != "single" else None
@@ -74,7 +75,7 @@ def run(dry_run: bool) -> int:
         except WriterRefusal as exc:
             log.warning("건너뜀 (%s)", exc)
             continue
-        a, b, extra = gather_images(card, s)
+        a, b, extra = gather_images(card, s, writer.source_urls)
         if a is None:
             log.warning("건너뜀 (이야기에 맞는 사진을 못 찾음: %s)", card.photo_queries)
             continue
