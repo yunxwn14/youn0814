@@ -28,7 +28,7 @@ def _bool(name: str, default: bool) -> bool:
 
 @dataclass
 class Settings:
-    claude_model: str = "claude-opus-5"
+    claude_model: str = "claude-sonnet-5"
     web_research: bool = True
 
     ig_user_id: str = ""
@@ -58,7 +58,7 @@ class Settings:
         _load_dotenv()
         env = os.environ.get
         return cls(
-            claude_model=env("CLAUDE_MODEL") or "claude-opus-5",
+            claude_model=env("CLAUDE_MODEL") or "claude-sonnet-5",
             web_research=_bool("WEB_RESEARCH", True),
             ig_user_id=env("IG_USER_ID", ""),
             ig_access_token=env("IG_ACCESS_TOKEN", ""),
