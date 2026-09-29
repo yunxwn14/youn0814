@@ -10,8 +10,9 @@ from datetime import datetime
 from .cards import Renderer
 from .config import Settings
 from .history import History
-from .hosting import upload_all
-from .instagram import Instagram
+from .hosting import upload_all, upload_catbox, upload_github
+from .instagram import Instagram, InstagramError
+from .reels import make_reel
 from .photos import resolve
 from .sources import fetch_candidates
 from .writer import Writer, WriterRefusal, build_caption
@@ -33,6 +34,25 @@ def gather_images(card, s: Settings):
     log.info("이미지: layout=%s a=%s b=%s extra=%s", card.layout,
              a and a.credit, b and b.credit, extra and extra.credit)
     return a, b, extra
+
+
+def post_reel(ig: Instagram, images, cover_url: str, folder: str, caption: str, s: Settings) -> None:
+    """같은 이미지로 슬라이드쇼 영상을 만들어 릴스로 올린다. 실패해도 사진 게시물은 이미 올라간 상태."""
+    try:
+        video = make_reel(images, images[0].parent / "reel.mp4")
+        candidates = []
+        if s.image_host == "github" and s.github_token:
+            candidates.append(lambda: upload_github(video, f"posts/{folder}/reel.mp4", s))
+        candidates.append(lambda: upload_catbox(video))
+        for get_url in candidates:
+            try:
+                ig.publish_reel(get_url(), caption, cover_url=cover_url)
+                return
+            except (InstagramError, RuntimeError, OSError) as exc:
+                log.warning("릴스 업로드 실패, 다른 호스팅으로 재시도: %s", exc)
+        log.error("릴스 게시 실패 (사진 게시물은 정상 게시됨)")
+    except Exception as exc:  # 릴스는 부가 기능이라 전체 실행을 멈추지 않는다
+        log.error("릴스 생성 실패 (사진 게시물은 정상 게시됨): %s", exc)
 
 
 def run(dry_run: bool) -> int:
@@ -78,6 +98,9 @@ def run(dry_run: bool) -> int:
             # 미리보기도 링크로 볼 수 있게 images 브랜치의 previews/ 에 올린다
             for url in upload_all(images, folder, s, prefix="previews"):
                 print(f"미리보기: {url}")
+            if s.post_reels:
+                video = make_reel(images, images[0].parent / "reel.mp4")
+                print(f"미리보기 릴스: {upload_github(video, f'previews/{folder}/reel.mp4', s)}")
         print(caption)
         return 0
 
@@ -86,6 +109,8 @@ def run(dry_run: bool) -> int:
         return 1
     urls = upload_all(images, folder, s)
     media_id = ig.publish(urls, caption)
+    if s.post_reels:
+        post_reel(ig, images, urls[0], folder, caption, s)
 
     history.add(story.id, story.title, story.link, media_id)
     history.save()

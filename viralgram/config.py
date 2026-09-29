@@ -49,6 +49,7 @@ class Settings:
     font_path: str = ""
     brand_handle: str = ""
     caption_signoff: str = "탐정냥의 사건 보고 끝 🐾"
+    post_reels: bool = True  # 사진 게시물과 같은 내용을 릴스(슬라이드쇼 영상)로도 올림
 
     history_path: Path = Path("data/posted.json")
     output_dir: Path = Path("output")
@@ -75,6 +76,7 @@ class Settings:
             font_path=env("FONT_PATH", ""),
             brand_handle=env("BRAND_HANDLE", ""),
             caption_signoff=env("CAPTION_SIGNOFF") or "탐정냥의 사건 보고 끝 🐾",
+            post_reels=_bool("POST_REELS", True),
             history_path=Path(env("HISTORY_PATH") or "data/posted.json"),
             output_dir=Path(env("OUTPUT_DIR") or "output"),
         )

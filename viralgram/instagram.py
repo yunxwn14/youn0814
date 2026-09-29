@@ -87,3 +87,15 @@ class Instagram:
         media = self._call("POST", f"{self.user_id}/media_publish", creation_id=container["id"])
         log.info("게시 완료: media_id=%s", media["id"])
         return media["id"]
+
+    def publish_reel(self, video_url: str, caption: str, cover_url: str = "", share_to_feed: bool = False) -> str:
+        """릴스 게시. share_to_feed=False 면 릴스 탭에만 올라가 사진 게시물과 피드에서 겹치지 않는다."""
+        params = dict(media_type="REELS", video_url=video_url, caption=caption,
+                      share_to_feed="true" if share_to_feed else "false")
+        if cover_url:
+            params["cover_url"] = cover_url
+        container = self._call("POST", f"{self.user_id}/media", **params)
+        self._wait_ready(container["id"], timeout=600)
+        media = self._call("POST", f"{self.user_id}/media_publish", creation_id=container["id"])
+        log.info("릴스 게시 완료: media_id=%s", media["id"])
+        return media["id"]

@@ -3,3 +3,4 @@ feedparser>=6.0
 pillow>=10.0
 pydantic>=2.0
 requests>=2.31
+imageio-ffmpeg>=0.5

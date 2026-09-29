@@ -128,3 +128,14 @@ def test_validate_requires_second_image_for_multi_layout():
 def test_caption_marks_ai_images():
     caption = build_caption(sample_card(), ["AI 생성 이미지", "A / Pexels"])
     assert "AI로 생성" in caption
+
+
+def test_make_reel_creates_vertical_video(tmp_path: Path):
+    from viralgram.reels import make_reel
+    imgs = []
+    for i in range(2):
+        p = tmp_path / f"{i}.jpg"
+        fake_photo(i + 1).image.resize((1080, 1350)).save(p)
+        imgs.append(p)
+    out = make_reel(imgs, tmp_path / "reel.mp4")
+    assert out.exists() and out.stat().st_size > 10_000

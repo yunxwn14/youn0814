@@ -70,3 +70,20 @@ def upload_all(paths: list[Path], folder: str, s: Settings, prefix: str = "posts
         log.info("업로드: %s", url)
         urls.append(url)
     return urls
+
+
+def upload_catbox(path: Path) -> str:
+    """catbox.moe 무료 익명 업로드 (영상 형식을 video/mp4 로 알려줘 인스타가 잘 받는다)."""
+    with path.open("rb") as f:
+        resp = requests.post(
+            "https://catbox.moe/user/api.php",
+            data={"reqtype": "fileupload"},
+            files={"fileToUpload": (path.name, f, "video/mp4")},
+            timeout=180,
+        )
+    resp.raise_for_status()
+    url = resp.text.strip()
+    if not url.startswith("https://"):
+        raise RuntimeError(f"catbox 업로드 실패: {url[:200]}")
+    log.info("영상 업로드 (catbox): %s", url)
+    return url
