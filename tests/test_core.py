@@ -19,6 +19,7 @@ def sample_card() -> CardNews:
     return CardNews(
         headline="실수로 어항 깨자, 싱크대에\n물받아 금붕어 살려준 도둑들",
         body="영국의 한 가정집에 침입한 절도범들이 깨진 어항 속 금붕어를 싱크대에 옮겨 살려두고 달아났습니다.",
+        quip="도둑도 금붕어 앞에선 약해진다옹",
         hashtags=["#금붕어", "도둑", "#금붕어", "#해외 이슈"],
         source_credit="출처: 연합뉴스",
         article_url="",
@@ -103,7 +104,7 @@ def test_validate_card_rejects_vague_headline():
 
 def test_caption_signoff_after_body():
     caption = build_caption(sample_card(), signoff="탐정냥의 사건 보고 끝")
-    assert caption.index("탐정냥의 사건 보고 끝") < caption.index("출처: 연합뉴스")
+    assert caption.index("탐정냥 한마디: 도둑도") < caption.index("탐정냥의 사건 보고 끝") < caption.index("출처: 연합뉴스")
 
 
 def test_render_every_layout(tmp_path: Path):

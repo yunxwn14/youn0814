@@ -31,7 +31,7 @@ class ImageSpec(BaseModel):
         description="article: 원문 기사 대표 이미지(실제 인물·SNS 캡처·현장 사진이 핵심일 때). "
         "stock: 무료 사진(일반적인 장면·사물). ai: AI 생성(무료 사진으론 표현 안 되는 특정 장면·재현·과거 모습 등)"
     )
-    stock_query: str = Field(description="무료 사진 검색어 (다른 방법이 실패하면 이걸로 대체). " + PHOTO_QUERY_DESC)
+    stock_query: str = Field(description="무료 사진 검색어. source 가 article·ai 여도 항상 채울 것 (실패 시 대체용). " + PHOTO_QUERY_DESC)
     ai_prompt: str = Field(
         description="source 가 ai 일 때 영어 이미지 생성 프롬프트 (사실적인 사진 스타일, 구도·분위기 묘사). "
         "실존 인물·유명인·정치인·브랜드 로고는 절대 묘사하지 말 것. ai 가 아니면 빈 문자열"
@@ -45,6 +45,10 @@ class CardNews(BaseModel):
         "(예: \"은행 영업시간 이제 '30분'\\n짧아진다, 금융노사 합의완료\")"
     )
     body: str = Field(description="캡션 본문. 뉴스체 존댓말(~습니다) 2~3문장, 120~250자. 원문에 있는 사실만")
+    quip: str = Field(
+        description="탐정냥(고양이 탐정 캐릭터)의 재치 있는 한마디. 친근한 반말·음슴체, 30자 이내, 드립·말장난·공감 개그. "
+        "피해자·약자를 조롱하지 말 것 (예: '냥탐정도 이건 예상 못 했다옹', '범인은 바로… 빨랫줄 욕심이었음')"
+    )
     hashtags: list[str] = Field(description="'#'으로 시작하는 해시태그 3~6개")
     source_credit: str = Field(description="출처 표기, 예: '출처: 연합뉴스'")
     article_url: str = Field(description="리서치 노트에 나온 언론사 원문 기사 URL (news.google.com 링크는 쓰지 말 것, 없으면 빈 문자열)")
@@ -81,6 +85,10 @@ SYSTEM = """당신은 한국 인스타그램 이슈 매거진 계정의 에디�
   원문 기사를 못 찾았을 때만 stock.
   무료 사진으로 표현 못 하는 특정 장면(재현, 과거 모습, 상상 속 장면)이면 ai.
 - ai 이미지에는 실존 인물·유명인·정치인·브랜드 로고를 넣지 않음 (필요하면 article 사용).
+
+재미:
+- 보는 사람이 피식 웃거나 "ㅋㅋ 이게 뭐야" 하게 만드는 포인트를 살림. 제목에 웃긴 대비·반전이 있으면 그걸 앞세움.
+- 캡션 끝의 탐정냥 한마디로 가볍게 웃기고 마무리 (본문은 뉴스체 유지).
 
 캡션 본문:
 - 담백한 뉴스체 존댓말(~습니다, ~했습니다). 2~3문장으로 무슨 일인지만 전달.
@@ -136,7 +144,8 @@ class Writer:
                     "content": (
                         "아래 후보 중 인스타그램에서 조회수·공유·댓글이 폭발할 이야기를 골라 순위를 매겨주세요.\n"
                         "우선순위: ① 댓글창에서 편이 확 갈리거나 공분·경악이 터질 이야기 (돈, 연애·결혼, 직장, 매너, 진상, 세대 차이 등 "
-                        "생활 밀착형) ② 제목만 봐도 '헐' 소리 나는 충격·황당·반전 ③ 친구를 태그하고 싶은 어이없거나 신기한 이야기.\n"
+                        "생활 밀착형) ② 제목만 봐도 '헐' 소리 나는 충격·황당·반전 ③ 친구를 태그하고 싶은 웃기거나 어이없는 이야기.\n"
+                        "무겁기만 한 이야기보다 '웃기면서 황당한' 이야기를 더 높게 쳐주세요 (분노 소재만 연달아 고르지 말 것).\n"
                         "'나라면?', '누구 잘못?' 같은 반응이 바로 나오는 소재일수록 높게 쳐주세요.\n"
                         "밋밋한 미담, 기업·지자체 홍보성 기사, 정책 발표, 정보가 너무 적어 이야기가 안 되는 후보는 제외하세요.\n"
                         "최근 게시물과 비슷한 소재는 피해주세요.\n\n"
@@ -214,6 +223,10 @@ class Writer:
         problem = ""
         for _ in range(attempts):
             card = self._write_once(story, notes)
+            # 기사·AI 이미지를 고르면 대체용 검색어를 비워 두는 경우가 있어 마지막 장 검색어로 채운다
+            for spec in (card.image_a, card.image_b):
+                if spec is not None and not spec.stock_query.strip():
+                    spec.stock_query = card.extra_photo_query
             problem = validate_card(card)
             if not problem:
                 return card
@@ -267,7 +280,8 @@ def build_caption(card: CardNews, photo_credits: list[str] | None = None, signof
         if len(tag) > 1 and tag not in tags:
             tags.append(tag)
     title = " ".join(line.strip() for line in card.headline.split("\n") if line.strip())
-    parts = [f"[{title}]", card.body.strip(), signoff.strip()]
+    quip = card.quip.strip()
+    parts = [f"[{title}]", card.body.strip(), f"🐾 탐정냥 한마디: {quip}" if quip else "", signoff.strip()]
     credit = card.source_credit.strip()
     if photo_credits:
         credit += "\n사진: " + ", ".join(dict.fromkeys(photo_credits))
