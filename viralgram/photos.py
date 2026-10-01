@@ -19,7 +19,7 @@ import random
 from urllib.parse import quote, urljoin
 
 import requests
-from PIL import Image
+from PIL import Image, ImageOps, ImageStat
 
 log = logging.getLogger(__name__)
 
@@ -90,6 +90,22 @@ def _download_one(url: str, min_side: int = MIN_SIDE) -> Image.Image | None:
     return img
 
 
+_LOGO_URL = re.compile(r"logo|favicon|placeholder|default[-_]?(?:image|thumb|og)|no[-_]?image|sprite", re.I)
+
+
+def looks_like_logo(img: Image.Image, url: str = "") -> bool:
+    """매체 로고·기본 이미지 같은 건 사진이 아니므로 거른다 (주소에 logo 등이 있거나, 거의 단색, 정사각형 + 단순한 그림)."""
+    if _LOGO_URL.search(url):
+        return True
+    small = ImageOps.grayscale(img.resize((64, 64)))
+    stat = ImageStat.Stat(small)
+    if stat.stddev[0] < 22:  # 대비가 거의 없는 화면 (검은 배경 + 작은 로고 등)
+        return True
+    ratio = img.width / img.height
+    colors = len(small.getcolors(maxcolors=4096) or range(4096))
+    return 0.85 < ratio < 1.18 and colors < 40
+
+
 def _search(query: str, pexels_key: str) -> list[tuple[list[str], str]]:
     """결과가 없으면 뒤에서부터 단어를 줄여가며 다시 검색 ('empty fashion runway' → 'empty fashion' → 'empty')."""
     words = query.split()
@@ -148,6 +164,10 @@ def fetch_article_image(article_url: str | list[str], credit: str, used: set[str
         return None
     img = _download_one(img_url, min_side=400)
     if not img:
+        return None
+    if looks_like_logo(img, img_url):
+        log.info("로고/기본 이미지로 보여 제외: %s", img_url)
+        used.add(img_url)
         return None
     used.add(img_url)
     return Photo(img, credit)

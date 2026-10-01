@@ -144,6 +144,16 @@ def test_make_reel_creates_vertical_video(tmp_path: Path):
     assert out.exists() and out.stat().st_size > 10_000
 
 
+def _fake_photo(size=(1200, 630)):
+    """로고 필터를 통과하는, 대비 있는 가짜 사진 (가로 줄무늬)."""
+    from PIL import ImageDraw
+    img = Image.new("RGB", size, "#203040")
+    d = ImageDraw.Draw(img)
+    for i in range(0, size[1], 40):
+        d.rectangle((0, i, size[0], i + 20), fill=(200, 160 + i % 80, 90))
+    return img
+
+
 def test_article_image_skips_already_used(monkeypatch):
     from types import SimpleNamespace
     import viralgram.photos as P
@@ -155,7 +165,7 @@ def test_article_image_skips_already_used(monkeypatch):
     }
     monkeypatch.setattr(P.requests, "get", lambda url, **k: SimpleNamespace(
         text=pages[url], url=url, raise_for_status=lambda: None))
-    monkeypatch.setattr(P, "_download_one", lambda url, min_side=700: Image.new("RGB", (800, 800)))
+    monkeypatch.setattr(P, "_download_one", lambda url, min_side=700: _fake_photo())
     used: set[str] = set()
     first = P.fetch_article_image(list(pages), "연합뉴스", used)
     second = P.fetch_article_image(list(pages), "연합뉴스", used)
@@ -183,3 +193,16 @@ def test_gather_images_always_uses_article_photo_as_thumbnail(monkeypatch):
     card = sample_card().model_copy(update={"image_a": ai_a})  # Claude 가 AI/무료 사진을 골라도
     a, b, extra = M.gather_images(card, Settings(), [], cover, set())
     assert a is cover and b is None and extra is None
+
+
+def test_looks_like_logo():
+    import random
+    from PIL import Image, ImageDraw
+    from viralgram.photos import looks_like_logo
+
+    logo = Image.new("RGB", (800, 800), "#222222")
+    ImageDraw.Draw(logo).ellipse((350, 350, 450, 450), fill="#FFFFFF")
+    assert looks_like_logo(logo)
+    assert looks_like_logo(Image.new("RGB", (1200, 630), "#888888"))
+    assert looks_like_logo(Image.new("RGB", (1200, 630), "#888888").copy(), "https://x.com/img/logo.png")
+    assert not looks_like_logo(_fake_photo())

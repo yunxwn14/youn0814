@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps, ImageStat
 from PIL import ImageFont
 
 from .photos import Photo
@@ -177,7 +177,7 @@ class Renderer:
 
     def follow_card(self, background: Image.Image | None = None) -> Image.Image:
         """마지막 장: 팔로우 부탁. 배경은 썸네일 사진을 흐리게 깔거나 단색."""
-        if background is not None:
+        if background is not None and ImageStat.Stat(ImageOps.grayscale(background.resize((64, 64)))).stddev[0] > 25:
             img = ImageEnhance.Brightness(
                 ImageOps.fit(background.convert("RGB"), (W, H), Image.LANCZOS).filter(ImageFilter.GaussianBlur(36))
             ).enhance(0.35)
