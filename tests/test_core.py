@@ -162,3 +162,13 @@ def test_article_image_skips_already_used(monkeypatch):
     third = P.fetch_article_image(list(pages), "연합뉴스", used)
     assert first and second and third is None
     assert used == {"https://img/x.jpg", "https://img/y.jpg"}
+
+
+def test_split_of_two_landscape_photos_stacks_vertically(tmp_path: Path):
+    r = Renderer("fonts/NotoSansKR.ttf", "detective_nyang")
+    a = Photo(Image.new("RGB", (1600, 900), "#3a6ea5"), "A")
+    b = Photo(Image.new("RGB", (1600, 900), "#a55a3a"), "B")
+    img = r.compose("split", a, b)
+    top, bottom = img.getpixel((540, 300)), img.getpixel((540, 1050))
+    assert top[2] > top[0] and bottom[0] > bottom[2]  # 위는 파랑, 아래는 갈색 (좌우가 아니라 위아래)
+    assert img.getpixel((200, 700)) == img.getpixel((900, 700))  # 같은 가로줄은 한 사진

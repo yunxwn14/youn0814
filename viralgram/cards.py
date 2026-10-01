@@ -13,7 +13,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
+from PIL import ImageFont
 
 from .photos import Photo
 from .writer import CardNews
@@ -41,6 +42,18 @@ def find_font(preferred: str = "") -> str:
     raise FileNotFoundError(
         "한국어 폰트를 찾을 수 없습니다. README 의 폰트 설치 안내를 참고해 FONT_PATH 를 지정하세요."
     )
+
+
+def fit_whole(img: Image.Image, size: tuple[int, int], anchor: float = 0.5) -> Image.Image:
+    """사진을 자르지 않고 전체가 보이게 맞춘다. 남는 부분은 같은 사진을 흐리게 깔아 채운다.
+    anchor: 남는 세로 공간에서 사진이 놓일 위치 (0=맨 위, 0.5=가운데). 제목이 들어갈 아래쪽을 비워 두려면 작게."""
+    w, h = size
+    img = img.convert("RGB")
+    bg = ImageOps.fit(img, (w, h), Image.LANCZOS).filter(ImageFilter.GaussianBlur(30))
+    bg = ImageEnhance.Brightness(bg).enhance(0.6)
+    fg = ImageOps.contain(img, (w, h), Image.LANCZOS)
+    bg.paste(fg, ((w - fg.width) // 2, int((h - fg.height) * anchor)))
+    return bg
 
 
 class Renderer:
@@ -102,23 +115,27 @@ class Renderer:
         if a is None:
             return Image.new("RGB", (W, H), "#222222")
         if b is None or layout == "single":
-            img = ImageOps.fit(a.image, (W, H), Image.LANCZOS)
+            img = fit_whole(a.image, (W, H), anchor=0.35)
             if a.ai:
                 self._ai_tag(img, (0, 0, W, H))
             return img
         img = Image.new("RGB", (W, H), "#FFFFFF")
+        landscape = a.image.width > a.image.height and b.image.width > b.image.height
+        if layout == "split" and landscape:
+            # 가로 사진 두 장을 좁은 반쪽씩에 넣으면 너무 작아지므로 위아래로 쌓는다 (라벨 없이)
+            layout, label_a, label_b = "compare", "", ""
         if layout == "split":
             half = W // 2
-            img.paste(ImageOps.fit(a.image, (half - 3, H), Image.LANCZOS), (0, 0))
-            img.paste(ImageOps.fit(b.image, (W - half - 3, H), Image.LANCZOS), (half + 3, 0))
+            img.paste(fit_whole(a.image, (half - 3, H), anchor=0.35), (0, 0))
+            img.paste(fit_whole(b.image, (W - half - 3, H), anchor=0.35), (half + 3, 0))
             if a.ai:
                 self._ai_tag(img, (0, 0, half, H))
             if b.ai:
                 self._ai_tag(img, (half, 0, W, H))
         elif layout == "compare":
             half = H // 2
-            img.paste(ImageOps.fit(a.image, (W, half - 3), Image.LANCZOS), (0, 0))
-            img.paste(ImageOps.fit(b.image, (W, H - half - 3), Image.LANCZOS), (0, half + 3))
+            img.paste(fit_whole(a.image, (W, half - 3)), (0, 0))
+            img.paste(fit_whole(b.image, (W, H - half - 3)), (0, half + 3))
             self._label(img, label_a, W // 2, 90)
             self._label(img, label_b, W // 2, half + 60)
             if a.ai:
@@ -126,7 +143,7 @@ class Renderer:
             if b.ai:
                 self._ai_tag(img, (0, half, W, H))
         else:  # inset
-            img = ImageOps.fit(a.image, (W, H), Image.LANCZOS)
+            img = fit_whole(a.image, (W, H), anchor=0.35)
             d, x, y, border = 380, 50, 70, 10
             circle = ImageOps.fit(b.image, (d, d), Image.LANCZOS)
             mask = Image.new("L", (d, d), 0)
@@ -153,7 +170,7 @@ class Renderer:
         return img
 
     def plain(self, photo: Photo) -> Image.Image:
-        img = ImageOps.fit(photo.image, (W, H), Image.LANCZOS)
+        img = fit_whole(photo.image, (W, H), anchor=0.5)
         if photo.ai:
             self._ai_tag(img, (0, 0, W, H))
         return img
