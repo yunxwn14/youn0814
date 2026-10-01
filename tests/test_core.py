@@ -62,7 +62,7 @@ def test_caption_dedupes_hashtags_and_limits_length():
 
 def test_render_cards(tmp_path: Path):
     paths = Renderer("fonts/NotoSansKR.ttf", "viral_story").render(sample_card(), tmp_path, None)
-    assert len(paths) == 1
+    assert len(paths) == 2
     assert Image.open(paths[0]).size == (1080, 1350)
 
 
@@ -80,7 +80,7 @@ def fake_photo(seed: int) -> Photo:
 def test_render_cards_with_photos(tmp_path: Path):
     paths = Renderer("fonts/NotoSansKR.ttf", "@viral_story").render(
         sample_card(), tmp_path, fake_photo(1), None, [None, fake_photo(2)])
-    assert len(paths) == 2  # 썸네일 + 글씨 없는 사진
+    assert len(paths) == 3  # 썸네일 + 글씨 없는 사진 + 팔로우 안내
     assert all(Image.open(p).size == (1080, 1350) for p in paths)
 
 

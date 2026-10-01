@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import random
 import subprocess
 from pathlib import Path
 
@@ -42,8 +43,14 @@ def _zoom_frames(frame: Image.Image, n: int, zoom_to: float = 1.06):
         yield frame.resize((W, H), Image.BICUBIC, box=(x0, y0, x0 + w, y0 + h))
 
 
-def make_reel(pages: list[Path], out: Path) -> Path:
-    """이미지들을 순서대로 이어 붙인 MP4 를 만든다 (무음 오디오 트랙 포함)."""
+def pick_music(folder: str = "music") -> Path | None:
+    """저작권 걱정 없는 배경음악(직접 넣은 mp3/m4a/wav)을 music/ 폴더에서 무작위로 고른다. 없으면 None."""
+    tracks = [p for p in Path(folder).glob("*") if p.suffix.lower() in {".mp3", ".m4a", ".wav", ".aac"}]
+    return random.choice(tracks) if tracks else None
+
+
+def make_reel(pages: list[Path], out: Path, music: Path | None = None) -> Path:
+    """이미지들을 순서대로 이어 붙인 MP4 를 만든다. music 이 있으면 배경음악으로 깔고(끝에서 페이드아웃), 없으면 무음 트랙."""
     out.parent.mkdir(parents=True, exist_ok=True)
     frames = [vertical_frame(p, out.parent / f"reel_{i:02d}.png") for i, p in enumerate(pages)]
     durations = [FIRST_SECONDS if len(frames) > 1 else 7.0] + [OTHER_SECONDS] * (len(frames) - 1)
@@ -52,7 +59,9 @@ def make_reel(pages: list[Path], out: Path) -> Path:
     cmd = [
         imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error",
         "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
-        "-f", "lavfi", "-t", f"{total}", "-i", "anullsrc=r=44100:cl=stereo",
+        *(["-stream_loop", "-1", "-i", str(music)] if music else
+          ["-f", "lavfi", "-t", f"{total}", "-i", "anullsrc=r=44100:cl=stereo"]),
+        *(["-af", f"afade=t=out:st={max(total - 1.5, 0)}:d=1.5,volume=0.8"] if music else []),
         "-map", "0:v", "-map", "1:a",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart",

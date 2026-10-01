@@ -175,6 +175,29 @@ class Renderer:
             self._ai_tag(img, (0, 0, W, H))
         return img
 
+    def follow_card(self, background: Image.Image | None = None) -> Image.Image:
+        """마지막 장: 팔로우 부탁. 배경은 썸네일 사진을 흐리게 깔거나 단색."""
+        if background is not None:
+            img = ImageEnhance.Brightness(
+                ImageOps.fit(background.convert("RGB"), (W, H), Image.LANCZOS).filter(ImageFilter.GaussianBlur(36))
+            ).enhance(0.35)
+        else:
+            img = Image.new("RGB", (W, H), "#1B1B1F")
+        draw = ImageDraw.Draw(img)
+        cx = W // 2
+        draw.text((cx, 470), "다음 사건도", font=self.font(104, "Black"), fill="#FFFFFF", anchor="mm")
+        draw.text((cx, 600), "놓치지 마세요", font=self.font(104, "Black"), fill="#FFD84D", anchor="mm")
+        draw.text((cx, 790), "팔로우하고 매일 새로운", font=self.font(54, "Bold"), fill="#FFFFFF", anchor="mm")
+        draw.text((cx, 870), "화제 이슈 소식 받아보기", font=self.font(54, "Bold"), fill="#FFFFFF", anchor="mm")
+        if self.brand:
+            f = self.font(60, "Black")
+            tw = draw.textlength(self.brand, font=f)
+            draw.rounded_rectangle((cx - tw / 2 - 40, 990, cx + tw / 2 + 40, 1100), radius=55, fill="#FFD84D")
+            draw.text((cx, 1045), self.brand, font=f, fill="#111111", anchor="mm")
+        draw.text((cx, 1190), "저장 · 공유도 큰 힘이 됩니다", font=self.font(40, "Bold"),
+                  fill="#CCCCCC", anchor="mm")
+        return img
+
     def render(self, card: CardNews, out_dir: Path, a: Photo | None, b: Photo | None = None,
                extras: list[Photo | None] | None = None) -> list[Path]:
         """1장: 레이아웃대로 a·b 를 배치한 썸네일. 이후: 글씨 없는 사진들 (b, extras 중 썸네일에 안 쓴 것)."""
@@ -185,6 +208,7 @@ class Renderer:
         pages = [self.thumbnail(card.headline, self.compose(layout, a, b, label_a, label_b))]
         for photo in [p for p in (extras or []) if p][:1]:
             pages.append(self.plain(photo))
+        pages.append(self.follow_card(a.image if a else None))
         paths = []
         for i, page in enumerate(pages, 1):
             path = out_dir / f"{i:02d}.jpg"

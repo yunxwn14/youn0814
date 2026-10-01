@@ -12,7 +12,7 @@ from .config import Settings
 from .history import History
 from .hosting import upload_all, upload_catbox, upload_github
 from .instagram import Instagram, InstagramError
-from .reels import make_reel
+from .reels import make_reel, pick_music
 from .photos import fetch_article_image, resolve
 from .sources import fetch_candidates
 from .writer import Writer, WriterRefusal, build_caption
@@ -39,7 +39,7 @@ def gather_images(card, s: Settings, source_urls: list[str], cover, used: set[st
 def post_reel(ig: Instagram, images, cover_url: str, folder: str, caption: str, s: Settings) -> None:
     """같은 이미지로 슬라이드쇼 영상을 만들어 릴스로 올린다. 실패해도 사진 게시물은 이미 올라간 상태."""
     try:
-        video = make_reel(images, images[0].parent / "reel.mp4")
+        video = make_reel(images, images[0].parent / "reel.mp4", pick_music())
         candidates = []
         if s.image_host == "github" and s.github_token:
             candidates.append(lambda: upload_github(video, f"posts/{folder}/reel.mp4", s))
@@ -107,7 +107,7 @@ def run(dry_run: bool) -> int:
             for url in upload_all(images, folder, s, prefix="previews"):
                 print(f"미리보기: {url}")
             if s.post_reels:
-                video = make_reel(images, images[0].parent / "reel.mp4")
+                video = make_reel(images, images[0].parent / "reel.mp4", pick_music())
                 print(f"미리보기 릴스: {upload_github(video, f'previews/{folder}/reel.mp4', s)}")
         print(caption)
         return 0
