@@ -172,3 +172,14 @@ def test_split_of_two_landscape_photos_stacks_vertically(tmp_path: Path):
     top, bottom = img.getpixel((540, 300)), img.getpixel((540, 1050))
     assert top[2] > top[0] and bottom[0] > bottom[2]  # 위는 파랑, 아래는 갈색 (좌우가 아니라 위아래)
     assert img.getpixel((200, 700)) == img.getpixel((900, 700))  # 같은 가로줄은 한 사진
+
+
+def test_gather_images_always_uses_article_photo_as_thumbnail(monkeypatch):
+    import viralgram.__main__ as M
+    from viralgram.config import Settings
+    cover = Photo(Image.new("RGB", (800, 800)), "뉴시스")
+    monkeypatch.setattr(M, "fetch_article_image", lambda urls, credit, used: None)
+    ai_a = ImageSpec(source="ai", stock_query="x", ai_prompt="p", label="")
+    card = sample_card().model_copy(update={"image_a": ai_a})  # Claude 가 AI/무료 사진을 골라도
+    a, b, extra = M.gather_images(card, Settings(), [], cover, set())
+    assert a is cover and b is None and extra is None

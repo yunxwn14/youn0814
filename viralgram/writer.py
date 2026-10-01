@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 class Selection(BaseModel):
     ranking: list[int] = Field(
-        description="게시하기 좋은 순서대로 정렬한 후보 번호 (최대 5개). 부적합한 후보는 제외."
+        description="게시하기 좋은 순서대로 정렬한 후보 번호 (최대 8개). 부적합한 후보는 제외."
     )
     reason: str = Field(description="1순위를 고른 이유 한 문장")
 

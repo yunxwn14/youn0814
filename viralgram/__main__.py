@@ -20,22 +20,20 @@ from .writer import Writer, WriterRefusal, build_caption
 log = logging.getLogger("viralgram")
 
 
-def gather_images(card, s: Settings, source_urls: list[str] | None = None):
-    """레이아웃에 필요한 이미지(a, b)와 마지막 장용 사진(extra)을 확보한다."""
-    used: set[str] = set()
+def gather_images(card, s: Settings, source_urls: list[str], cover, used: set[str]):
+    """썸네일은 항상 기사 사진(cover). 비교 레이아웃의 두 번째 이미지(b)와 둘째 장(extra)을 확보한다."""
     source_name = card.source_credit.replace("출처:", "").strip() or "원문 기사"
-    article_urls = list(dict.fromkeys([card.article_url, *(source_urls or [])]))
+    article_urls = list(dict.fromkeys([card.article_url, *source_urls]))
     opts = dict(article_url=article_urls, article_credit=source_name, pexels_key=s.pexels_api_key,
                 openai_key=s.openai_api_key, image_model=s.image_model, used=used)
-    a = resolve(card.image_a, **opts)
     b = resolve(card.image_b, **opts) if card.image_b and card.layout != "single" else None
     if card.image_b and card.layout != "single" and b is None:
         log.info("두 번째 이미지를 못 구해 single 레이아웃으로 대체")
     # 둘째 장: 같은 사건을 다룬 다른 기사의 사진만 쓴다. 없으면 억지로 채우지 않고 1장으로 게시.
     extra = fetch_article_image(article_urls, source_name, used)
     log.info("이미지: layout=%s a=%s b=%s extra=%s", card.layout,
-             a and a.credit, b and b.credit, extra and extra.credit)
-    return a, b, extra
+             cover.credit, b and b.credit, extra and extra.credit)
+    return cover, b, extra
 
 
 def post_reel(ig: Instagram, images, cover_url: str, folder: str, caption: str, s: Settings) -> None:
@@ -72,14 +70,22 @@ def run(dry_run: bool) -> int:
     for story in ranked:
         log.info("작성 중: [%s] %s (%s)", story.region, story.title, story.source)
         try:
-            card = writer.write(story, writer.research(story))
+            notes = writer.research(story)
         except WriterRefusal as exc:
             log.warning("건너뜀 (%s)", exc)
             continue
-        a, b, extra = gather_images(card, s, writer.source_urls)
-        if a is None:
-            log.warning("건너뜀 (이야기에 맞는 사진을 못 찾음: %s)", card.photo_queries)
+        # 기사 사진이 구해지는 이야기만 쓴다 (원고 쓰기 전에 확인해 비용 절약)
+        used: set[str] = set()
+        cover = fetch_article_image(writer.source_urls, story.source or "원문 기사", used)
+        if cover is None:
+            log.warning("건너뜀 (기사 사진을 구하지 못함): %s", story.title)
             continue
+        try:
+            card = writer.write(story, notes)
+        except WriterRefusal as exc:
+            log.warning("건너뜀 (%s)", exc)
+            continue
+        a, b, extra = gather_images(card, s, writer.source_urls, cover, used)
         break
     else:
         log.error("게시할 수 있는 이야기를 만들지 못했습니다.")
