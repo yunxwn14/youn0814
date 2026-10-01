@@ -13,7 +13,7 @@ from .history import History
 from .hosting import upload_all, upload_catbox, upload_github
 from .instagram import Instagram, InstagramError
 from .reels import make_reel
-from .photos import resolve
+from .photos import fetch_article_image, resolve
 from .sources import fetch_candidates
 from .writer import Writer, WriterRefusal, build_caption
 
@@ -31,7 +31,8 @@ def gather_images(card, s: Settings, source_urls: list[str] | None = None):
     b = resolve(card.image_b, **opts) if card.image_b and card.layout != "single" else None
     if card.image_b and card.layout != "single" and b is None:
         log.info("두 번째 이미지를 못 구해 single 레이아웃으로 대체")
-    extra = resolve(card.image_a.model_copy(update={"source": "stock", "stock_query": card.extra_photo_query}), **opts)
+    # 둘째 장: 같은 사건을 다룬 다른 기사의 사진만 쓴다. 없으면 억지로 채우지 않고 1장으로 게시.
+    extra = fetch_article_image(article_urls, source_name, used)
     log.info("이미지: layout=%s a=%s b=%s extra=%s", card.layout,
              a and a.credit, b and b.credit, extra and extra.credit)
     return a, b, extra

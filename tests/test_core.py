@@ -26,15 +26,14 @@ def sample_card() -> CardNews:
         layout="single",
         image_a=ImageSpec(source="stock", stock_query="goldfish", ai_prompt="", label=""),
         image_b=None,
-        extra_photo_query="kitchen sink",
     )
 
 
 def test_photo_queries_follow_page_order():
-    assert sample_card().photo_queries == ["goldfish", "kitchen sink"]
+    assert sample_card().photo_queries == ["goldfish"]
     card = sample_card().model_copy(update={"layout": "split", "image_b": ImageSpec(
         source="ai", stock_query="thief", ai_prompt="a burglar", label="")})
-    assert card.photo_queries == ["goldfish", "thief", "kitchen sink"]
+    assert card.photo_queries == ["goldfish", "thief"]
 
 
 def test_parse_feed_splits_source_and_cleans_html():
@@ -94,7 +93,10 @@ def test_validate_card_rejects_broken_output():
     assert validate_card(sample_card()) == ""
     assert "한글" in validate_card(sample_card().model_copy(update={"headline": '"\U0001f608\ufe0f\U0001f609"'}))
     assert "문자" in validate_card(sample_card().model_copy(update={"headline": "성묘 갔더니 할머니 산소 앞\n골프 연습 \U0001f3cc"}))
-    assert "검색어" in validate_card(sample_card().model_copy(update={"extra_photo_query": " "}))
+    empty = ImageSpec(source="stock", stock_query=" ", ai_prompt="", label="")
+    assert "검색어" in validate_card(sample_card().model_copy(update={"image_a": empty}))
+    article = ImageSpec(source="article", stock_query="", ai_prompt="", label="")
+    assert validate_card(sample_card().model_copy(update={"image_a": article})) == ""
 
 
 def test_validate_card_rejects_vague_headline():
@@ -140,3 +142,23 @@ def test_make_reel_creates_vertical_video(tmp_path: Path):
         imgs.append(p)
     out = make_reel(imgs, tmp_path / "reel.mp4")
     assert out.exists() and out.stat().st_size > 10_000
+
+
+def test_article_image_skips_already_used(monkeypatch):
+    from types import SimpleNamespace
+    import viralgram.photos as P
+
+    pages = {
+        "https://a.kr/1": '<meta property="og:image" content="https://img/x.jpg">',
+        "https://b.kr/2": '<meta property="og:image" content="https://img/x.jpg">',  # 같은 사진 (통신사 배포)
+        "https://c.kr/3": '<meta property="og:image" content="https://img/y.jpg">',
+    }
+    monkeypatch.setattr(P.requests, "get", lambda url, **k: SimpleNamespace(
+        text=pages[url], url=url, raise_for_status=lambda: None))
+    monkeypatch.setattr(P, "_download_one", lambda url, min_side=700: Image.new("RGB", (800, 800)))
+    used: set[str] = set()
+    first = P.fetch_article_image(list(pages), "연합뉴스", used)
+    second = P.fetch_article_image(list(pages), "연합뉴스", used)
+    third = P.fetch_article_image(list(pages), "연합뉴스", used)
+    assert first and second and third is None
+    assert used == {"https://img/x.jpg", "https://img/y.jpg"}

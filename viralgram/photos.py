@@ -121,11 +121,13 @@ _OG_IMAGE = re.compile(
 )
 
 
-def fetch_article_image(article_url: str | list[str], credit: str) -> Photo | None:
-    """원문 기사 페이지의 대표 이미지(og:image)를 가져온다. 주소 목록이면 성공할 때까지 차례로 시도."""
+def fetch_article_image(article_url: str | list[str], credit: str, used: set[str] | None = None) -> Photo | None:
+    """원문 기사 페이지의 대표 이미지(og:image)를 가져온다. 주소 목록이면 성공할 때까지 차례로 시도.
+    used 에 이미 쓴 이미지 주소가 있으면 건너뛰어, 같은 사건을 다룬 다른 기사의 다른 사진을 얻을 수 있다."""
+    used = used if used is not None else set()
     if isinstance(article_url, list):
-        for url in article_url[:6]:
-            photo = fetch_article_image(url, credit)
+        for url in article_url[:8]:
+            photo = fetch_article_image(url, credit, used)
             if photo:
                 return photo
         return None
@@ -142,8 +144,13 @@ def fetch_article_image(article_url: str | list[str], credit: str) -> Photo | No
         log.info("기사 대표 이미지 없음: %s", article_url)
         return None
     img_url = urljoin(resp.url, html.unescape(m.group(1) or m.group(2)))
+    if img_url in used:
+        return None
     img = _download_one(img_url, min_side=400)
-    return Photo(img, credit) if img else None
+    if not img:
+        return None
+    used.add(img_url)
+    return Photo(img, credit)
 
 
 def generate_ai_image(prompt: str, api_key: str, model: str = "gpt-image-1") -> Photo | None:
@@ -192,7 +199,7 @@ def resolve(spec, *, article_url: str | list[str], article_credit: str, pexels_k
     """ImageSpec 하나를 실제 이미지로. article/ai 가 안 되면 stock 으로 대체."""
     photo = None
     if spec.source == "article":
-        photo = fetch_article_image(article_url, article_credit)
+        photo = fetch_article_image(article_url, article_credit, used)
     elif spec.source == "ai":
         photo = generate_ai_image(spec.ai_prompt, openai_key, image_model)
     if photo is None:

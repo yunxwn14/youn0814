@@ -59,12 +59,11 @@ class CardNews(BaseModel):
     )
     image_a: ImageSpec = Field(description="메인 이미지 (split 은 왼쪽, compare 는 위)")
     image_b: ImageSpec | None = Field(description="두 번째 이미지 (split 오른쪽, inset 원형, compare 아래). single 이면 null")
-    extra_photo_query: str = Field(description="글씨 없이 마지막 장에 쓸 사진. " + PHOTO_QUERY_DESC)
 
     @property
     def photo_queries(self) -> list[str]:
         specs = [self.image_a] + ([self.image_b] if self.image_b else [])
-        return [q for q in [spec.stock_query for spec in specs] + [self.extra_photo_query] if q.strip()]
+        return [q for q in (spec.stock_query for spec in specs) if q.strip()]
 
 
 SYSTEM = """당신은 한국 인스타그램 이슈 매거진 계정의 에디터입니다.
@@ -223,10 +222,6 @@ class Writer:
         problem = ""
         for _ in range(attempts):
             card = self._write_once(story, notes)
-            # 기사·AI 이미지를 고르면 대체용 검색어를 비워 두는 경우가 있어 마지막 장 검색어로 채운다
-            for spec in (card.image_a, card.image_b):
-                if spec is not None and not spec.stock_query.strip():
-                    spec.stock_query = card.extra_photo_query
             problem = validate_card(card)
             if not problem:
                 return card
@@ -264,8 +259,9 @@ def validate_card(card: CardNews) -> str:
         return f"제목이 핵심을 숨김: {card.headline!r}"
     if len(_HANGUL.findall(card.body)) < 30:
         return "본문이 너무 짧음"
-    if not (card.image_a.stock_query.strip() and card.extra_photo_query.strip()):
-        return "사진 검색어가 비어 있음"
+    for spec in (card.image_a, card.image_b):
+        if spec is not None and spec.source == "stock" and not spec.stock_query.strip():
+            return "무료 사진 검색어가 비어 있음"
     if card.layout != "single" and card.image_b is None:
         return f"{card.layout} 레이아웃인데 두 번째 이미지가 없음"
     return ""

@@ -46,7 +46,7 @@ def make_reel(pages: list[Path], out: Path) -> Path:
     """이미지들을 순서대로 이어 붙인 MP4 를 만든다 (무음 오디오 트랙 포함)."""
     out.parent.mkdir(parents=True, exist_ok=True)
     frames = [vertical_frame(p, out.parent / f"reel_{i:02d}.png") for i, p in enumerate(pages)]
-    durations = [FIRST_SECONDS] + [OTHER_SECONDS] * (len(frames) - 1)
+    durations = [FIRST_SECONDS if len(frames) > 1 else 7.0] + [OTHER_SECONDS] * (len(frames) - 1)
     total = sum(durations)
 
     cmd = [
