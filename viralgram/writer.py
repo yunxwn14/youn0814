@@ -99,8 +99,8 @@ SYSTEM = """당신은 한국 인스타그램 이슈 매거진 계정의 에디�
 - "확인된 건 여기까지" 같은 취재 과정·정보 부족 언급은 쓰지 않습니다."""
 
 
-def _search_result_urls(turns) -> list[str]:
-    """웹 검색 결과 블록에서 기사 주소를 순서대로 모은다 (구글 뉴스 등 중계 주소 제외)."""
+def _search_result_urls(turns, titles: dict[str, str] | None = None) -> list[str]:
+    """웹 검색 결과 블록에서 기사 주소를 순서대로 모은다 (구글 뉴스 등 중계 주소 제외). titles 를 주면 주소별 제목도 채운다."""
     urls: list[str] = []
     for turn in turns:
         for block in turn["content"] if isinstance(turn["content"], list) else []:
@@ -111,7 +111,13 @@ def _search_result_urls(turns) -> list[str]:
                 url = getattr(r, "url", "")
                 if url and "news.google." not in url and url not in urls:
                     urls.append(url)
+                    if titles is not None:
+                        titles[url] = getattr(r, "title", "") or ""
     return urls
+
+
+class SameEvent(BaseModel):
+    indexes: list[int] = Field(description="기준 이야기와 같은 사건을 다룬 기사 번호들 (없으면 빈 리스트)")
 
 
 class WriterRefusal(Exception):
@@ -208,9 +214,36 @@ class Writer:
             messages = [messages[0], {"role": "assistant", "content": response.content}]
         self._check(response)
         notes = "\n".join(b.text for b in response.content if b.type == "text").strip()
-        self.source_urls = _search_result_urls(messages[1:] + [{"content": response.content}])
+        titles: dict[str, str] = {}
+        self.source_urls = _search_result_urls(messages[1:] + [{"content": response.content}], titles)
+        self.source_urls = self._same_event(story, notes, self.source_urls, titles)
         log.info("리서치 노트 %d자", len(notes))
         return notes
+
+    def _same_event(self, story: Story, notes: str, urls: list[str], titles: dict[str, str]) -> list[str]:
+        """검색 결과 중 이 이야기와 같은 사건을 다룬 기사만 남긴다 (다른 사건의 사진이 섞이는 것 방지).
+        판정이 실패하면 사진을 잘못 쓰느니 가장 처음 기사만 쓴다."""
+        if len(urls) <= 1:
+            return urls
+        listing = "\n".join(f"[{i}] {titles.get(u, '') or u}" for i, u in enumerate(urls))
+        try:
+            response = self.client.messages.parse(
+                model=self.model,
+                max_tokens=1000,
+                output_config={"effort": "low"},
+                messages=[{"role": "user", "content": (
+                    "아래 기사 제목들 중 '기준 이야기'와 같은 사건(같은 인물·같은 일·같은 행사)을 다룬 기사 번호만 골라주세요. "
+                    "비슷한 종류의 다른 사건·다른 행사·다른 날짜의 일은 제외합니다. 확실한 것만.\n\n"
+                    f"## 기준 이야기\n{story.title}\n{notes[:600]}\n\n## 기사 제목\n{listing}")}],
+                output_format=SameEvent,
+            )
+            self._check(response)
+            keep = [urls[i] for i in response.parsed_output.indexes if 0 <= i < len(urls)]
+            log.info("같은 사건 기사 %d/%d개", len(keep), len(urls))
+            return keep
+        except Exception as exc:  # noqa: BLE001 - 보조 판정이라 실패해도 진행
+            log.warning("같은 사건 판정 실패, 첫 기사만 사용: %s", exc)
+            return urls[:1]
 
     # ── 3) 카드뉴스 원고 작성 ──────────────────────────────
     def _write_once(self, story: Story, notes: str) -> CardNews:

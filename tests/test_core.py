@@ -219,3 +219,20 @@ def test_post_mode_by_time_and_feeds():
     assert resolve_mode("auto", datetime(2026, 10, 2, 11, 57, tzinfo=timezone.utc)) == "funny"  # 20:57 KST
     assert resolve_mode("issue", datetime(2026, 10, 2, 21, 0, tzinfo=kst)) == "issue"
     assert feeds_for("funny") is FUNNY_FEEDS and feeds_for("issue") is ISSUE_FEEDS
+
+
+def test_same_event_filter_keeps_only_matching_urls():
+    from types import SimpleNamespace
+    from viralgram.sources import Story
+    from viralgram.writer import Writer, SameEvent
+
+    w = Writer.__new__(Writer)
+    w._check = lambda r: None
+    parsed = SameEvent(indexes=[0, 2, 9])
+    w.client = SimpleNamespace(messages=SimpleNamespace(parse=lambda **k: SimpleNamespace(parsed_output=parsed, stop_reason="end_turn")))
+    w.model = "m"
+    urls = ["https://a/1", "https://b/2", "https://c/3"]
+    story = Story("해외", "인도 뚱뚱한 개 콘테스트", "", "", "x")
+    assert w._same_event(story, "", urls, {u: "t" for u in urls}) == ["https://a/1", "https://c/3"]
+    w.client = SimpleNamespace(messages=SimpleNamespace(parse=lambda **k: 1 / 0))
+    assert w._same_event(story, "", urls, {}) == ["https://a/1"]
