@@ -169,10 +169,32 @@ class Renderer:
             y += line_h
         return img
 
-    def plain(self, photo: Photo) -> Image.Image:
-        img = fit_whole(photo.image, (W, H), anchor=0.5)
+    def _wrap(self, draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, width: int) -> list[str]:
+        lines, cur = [], ""
+        for ch in text.strip():
+            if draw.textlength(cur + ch, font=font) > width and cur:
+                lines.append(cur.strip())
+                cur = ch
+            else:
+                cur += ch
+        return lines + ([cur.strip()] if cur.strip() else [])
+
+    def plain(self, photo: Photo, quip: str = "") -> Image.Image:
+        """글씨 없는 사진 페이지. 가로 사진이라 아래 여백이 크면 탐정냥 한마디를 그 자리에 넣는다."""
+        img = fit_whole(photo.image, (W, H), anchor=0.3)
         if photo.ai:
             self._ai_tag(img, (0, 0, W, H))
+        shown_h = min(H, round(photo.image.height * W / photo.image.width)) if photo.image.width else H
+        free_top = int((H - shown_h) * 0.3) + shown_h  # 사진 아래 끝
+        if quip.strip() and H - free_top > 330:
+            draw = ImageDraw.Draw(img)
+            font = self.font(52, "Black")
+            lines = self._wrap(draw, quip, font, W - 2 * MARGIN_X)[:3]
+            y = free_top + (H - free_top - 60 - 74 * len(lines)) // 2 + 60
+            draw.text((MARGIN_X, y - 56), "🐾 탐정냥 한마디".replace("🐾 ", ""), font=self.font(36, "Bold"), fill="#FFD84D")
+            for line in lines:
+                draw.text((MARGIN_X, y + 20), line, font=font, fill="#FFFFFF", stroke_width=1, stroke_fill="#000000")
+                y += 74
         return img
 
     def follow_card(self, background: Image.Image | None = None) -> Image.Image:
@@ -207,7 +229,7 @@ class Renderer:
         label_b = card.image_b.label if card.image_b else ""
         pages = [self.thumbnail(card.headline, self.compose(layout, a, b, label_a, label_b))]
         for photo in [p for p in (extras or []) if p][:1]:
-            pages.append(self.plain(photo))
+            pages.append(self.plain(photo, card.quip))
         pages.append(self.follow_card(a.image if a else None))
         paths = []
         for i, page in enumerate(pages, 1):
