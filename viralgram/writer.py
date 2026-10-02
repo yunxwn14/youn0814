@@ -118,20 +118,43 @@ class WriterRefusal(Exception):
     pass
 
 
+_RANK_ISSUE = (
+    "아래 후보 중 인스타그램에서 조회수·공유·댓글이 폭발할 이야기를 골라 순위를 매겨주세요.\n"
+    "우선순위: ① 댓글창에서 편이 확 갈리거나 공분·경악이 터질 이야기 (돈, 연애·결혼, 직장, 매너, 진상, 세대 차이 등 "
+    "생활 밀착형) ② 제목만 봐도 '헐' 소리 나는 충격·황당·반전 ③ 친구를 태그하고 싶은 어이없는 이야기.\n"
+    "'나라면?', '누구 잘못?' 같은 반응이 바로 나오는 소재일수록 높게 쳐주세요.\n"
+)
+_RANK_FUNNY = (
+    "오늘은 '웃긴 이야기' 시간입니다. 아래 후보 중 보자마자 피식·빵 터지고 친구에게 '이거 봐ㅋㅋ' 하고 보내고 싶어질 "
+    "이야기를 골라 순위를 매겨주세요.\n"
+    "우선순위: ① 엉뚱하고 황당한 해프닝·실수·오해 ② 귀여운 동물·아이의 웃기는 행동 ③ 댓글이 웃음으로 도배될 만한 사연·반전.\n"
+    "무겁거나 심각한 사건·사고, 정치·범죄, 분노·공분 소재, 누가 다치거나 피해 입은 이야기는 웃기더라도 제외하세요. "
+    "가볍게 웃고 넘길 수 있는 것만.\n"
+)
+
+
+_WRITE_FUNNY = (
+    "오늘은 '웃긴 이야기' 시간입니다. 썸네일 제목은 웃긴 상황·반전이 한눈에 보이게, 탐정냥 한마디는 "
+    "더 과감하게 드립을 치세요 (조롱·비하 없이 상황 자체를 웃기게).\n"
+)
+
+
 class Writer:
     def __init__(self, model: str, web_research: bool = True):
         self.client = anthropic.Anthropic()
         self.model = model
         self.web_research = web_research
+        self.mode = "issue"  # issue | funny
         self.source_urls: list[str] = []  # 마지막 리서치에서 웹 검색으로 찾은 기사 주소들 (기사 사진용)
 
     # ── 1) 후보 선정 ─────────────────────────────────────
-    def rank(self, stories: list[Story], recent_titles: list[str]) -> list[Story]:
+    def rank(self, stories: list[Story], recent_titles: list[str], mode: str = "issue") -> list[Story]:
         listing = "\n".join(
             f"[{i}] ({s.region}) {s.title} — {s.source}\n    {s.summary[:200]}"
             for i, s in enumerate(stories)
         )
         recent = "\n".join(f"- {t}" for t in recent_titles) or "(없음)"
+        self.mode = mode
         response = self.client.messages.parse(
             model=self.model,
             max_tokens=4000,
@@ -141,12 +164,8 @@ class Writer:
                 {
                     "role": "user",
                     "content": (
-                        "아래 후보 중 인스타그램에서 조회수·공유·댓글이 폭발할 이야기를 골라 순위를 매겨주세요.\n"
-                        "우선순위: ① 댓글창에서 편이 확 갈리거나 공분·경악이 터질 이야기 (돈, 연애·결혼, 직장, 매너, 진상, 세대 차이 등 "
-                        "생활 밀착형) ② 제목만 봐도 '헐' 소리 나는 충격·황당·반전 ③ 친구를 태그하고 싶은 웃기거나 어이없는 이야기.\n"
-                        "무겁기만 한 이야기보다 '웃기면서 황당한' 이야기를 더 높게 쳐주세요 (분노 소재만 연달아 고르지 말 것).\n"
-                        "'나라면?', '누구 잘못?' 같은 반응이 바로 나오는 소재일수록 높게 쳐주세요.\n"
-                        "밋밋한 미담, 기업·지자체 홍보성 기사, 정책 발표, 정보가 너무 적어 이야기가 안 되는 후보는 제외하세요.\n"
+                        (_RANK_FUNNY if mode == "funny" else _RANK_ISSUE)
+                        + "밋밋한 미담, 기업·지자체 홍보성 기사, 정책 발표, 정보가 너무 적어 이야기가 안 되는 후보는 제외하세요.\n"
                         "최근 게시물과 비슷한 소재는 피해주세요.\n\n"
                         f"## 최근 게시한 제목\n{recent}\n\n## 후보\n{listing}"
                     ),
@@ -204,7 +223,9 @@ class Writer:
                     "role": "user",
                     "content": (
                         "아래 이야기로 인스타그램 게시물(썸네일 제목 + 짧은 캡션)을 써주세요.\n"
-                        f"이 이야기는 {story.region} 소식입니다.\n\n"
+                        f"이 이야기는 {story.region} 소식입니다.\n"
+                        + (_WRITE_FUNNY if self.mode == "funny" else "")
+                        + "\n"
                         f"## 원문 정보\n제목: {story.title}\n요약: {story.summary}\n"
                         f"매체: {story.source}\n링크: {story.link}\n\n"
                         f"## 리서치 노트\n{notes or '(없음 — 원문 정보에 있는 사실만 사용)'}"

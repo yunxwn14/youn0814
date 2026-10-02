@@ -11,6 +11,11 @@ on:
         description: "게시하지 않고 이미지만 생성"
         type: boolean
         default: false
+      mode:
+        description: "주제: auto(낮=이슈, 저녁=웃긴 이야기) / issue / funny"
+        type: choice
+        options: [auto, issue, funny]
+        default: auto
 
 permissions:
   contents: write
@@ -53,6 +58,7 @@ jobs:
           IMAGE_MODEL: ${{ vars.IMAGE_MODEL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRAND_HANDLE: ${{ vars.BRAND_HANDLE }}
+          POST_MODE: ${{ inputs.mode || 'auto' }}
           FONT_PATH: fonts/NotoSansKR.ttf
           # 웹 검색으로 기사 실제 내용 파악 (끄면 제목만 보고 써서 썸네일이 모호해짐). 끄려면 Variables 에 WEB_RESEARCH=false
           WEB_RESEARCH: ${{ vars.WEB_RESEARCH || 'true' }}

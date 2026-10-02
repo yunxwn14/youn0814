@@ -206,3 +206,16 @@ def test_looks_like_logo():
     assert looks_like_logo(Image.new("RGB", (1200, 630), "#888888"))
     assert looks_like_logo(Image.new("RGB", (1200, 630), "#888888").copy(), "https://x.com/img/logo.png")
     assert not looks_like_logo(_fake_photo())
+
+
+def test_post_mode_by_time_and_feeds():
+    from datetime import datetime, timedelta, timezone
+    from viralgram.config import resolve_mode
+    from viralgram.sources import feeds_for, FUNNY_FEEDS, ISSUE_FEEDS
+
+    kst = timezone(timedelta(hours=9))
+    assert resolve_mode("auto", datetime(2026, 10, 2, 12, 27, tzinfo=kst)) == "issue"
+    assert resolve_mode("auto", datetime(2026, 10, 2, 20, 57, tzinfo=kst)) == "funny"
+    assert resolve_mode("auto", datetime(2026, 10, 2, 11, 57, tzinfo=timezone.utc)) == "funny"  # 20:57 KST
+    assert resolve_mode("issue", datetime(2026, 10, 2, 21, 0, tzinfo=kst)) == "issue"
+    assert feeds_for("funny") is FUNNY_FEEDS and feeds_for("issue") is ISSUE_FEEDS

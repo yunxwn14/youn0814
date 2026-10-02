@@ -24,14 +24,12 @@ def google_news(query: str, lang: str = "ko") -> str:
 
 
 # (지역, 피드 URL). 필요에 따라 자유롭게 추가/삭제하세요.
-DEFAULT_FEEDS: list[tuple[str, str]] = [
-    # 국내 — 누리꾼 반응이 뜨겁거나 편이 갈리는 생활 밀착형 이슈 위주
+# 낮: 이슈형 — 누리꾼 반응이 뜨겁거나 편이 갈리는 생활 밀착형 이슈
+ISSUE_FEEDS: list[tuple[str, str]] = [
     ("국내", google_news("누리꾼 갑론을박 when:2d")),
     ("국내", google_news("누리꾼 경악 OR 분노 OR 황당 when:2d")),
     ("국내", google_news("온라인 커뮤니티 난리 OR 발칵 when:2d")),
     ("국내", google_news("충격 반전 when:2d")),
-    ("국내", google_news("웃픈 OR 폭소 OR 빵터진 사연 when:3d")),
-    ("국내", google_news("이색 해프닝 OR 웃음 when:3d")),
     ("국내", google_news("역대급 화제 when:2d")),
     ("국내", google_news("사연 공분 OR 사이다 when:2d")),
     ("국내", google_news("진상 손님 OR 빌런 OR 무개념 when:3d")),
@@ -39,15 +37,35 @@ DEFAULT_FEEDS: list[tuple[str, str]] = [
     ("국내", google_news("신입사원 OR 직장인 OR MZ 논란 when:3d")),
     ("국내", google_news("연봉 OR 월급 OR 알바 논란 when:3d")),
     ("국내", google_news("층간소음 OR 주차 OR 배달 논란 when:3d")),
-    # 해외
     ("해외", google_news("sparks outrage OR backlash online when:2d", lang="en")),
     ("해외", google_news("internet divided OR sparks debate when:2d", lang="en")),
     ("해외", google_news("goes viral when:2d", lang="en")),
-    ("해외", google_news("hilarious OR funny viral story when:3d", lang="en")),
     ("해외", google_news("bizarre OR unbelievable OR shocking when:2d", lang="en")),
     ("해외", google_news("customer OR boss OR wedding viral story when:3d", lang="en")),
+]
+
+# 저녁: 웃긴 이야기 — 피식·빵 터지는 해프닝, 동물, 엉뚱한 사건
+FUNNY_FEEDS: list[tuple[str, str]] = [
+    ("국내", google_news("웃픈 OR 폭소 OR 빵터진 사연 when:3d")),
+    ("국내", google_news("이색 해프닝 OR 황당 웃음 when:3d")),
+    ("국내", google_news("엉뚱 OR 어이없는 OR 몰래카메라 when:3d")),
+    ("국내", google_news("고양이 OR 강아지 OR 동물 화제 영상 when:3d")),
+    ("국내", google_news("댓글 반응 웃음 OR 레전드 when:3d")),
+    ("국내", google_news("아이 OR 아기 엉뚱 행동 화제 when:3d")),
+    ("국내", google_news("실수 OR 오해 해프닝 황당 when:3d")),
+    ("해외", google_news("hilarious OR funny viral story when:3d", lang="en")),
+    ("해외", google_news("funny animal OR dog OR cat viral when:3d", lang="en")),
+    ("해외", google_news("man OR woman hilariously fails OR mistake viral when:3d", lang="en")),
+    ("해외", google_news("weird funny news when:3d", lang="en")),
+    ("해외", google_news("internet cracks up OR laughing viral when:3d", lang="en")),
     ("해외", "https://www.reddit.com/r/nottheonion/top/.rss?t=day"),
 ]
+
+DEFAULT_FEEDS = ISSUE_FEEDS + FUNNY_FEEDS
+
+
+def feeds_for(mode: str) -> list[tuple[str, str]]:
+    return FUNNY_FEEDS if mode == "funny" else ISSUE_FEEDS
 
 
 @dataclass

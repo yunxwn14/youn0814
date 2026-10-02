@@ -8,13 +8,13 @@ import sys
 from datetime import datetime
 
 from .cards import Renderer
-from .config import Settings
+from .config import Settings, resolve_mode
 from .history import History
 from .hosting import upload_all, upload_catbox, upload_github
 from .instagram import Instagram, InstagramError
 from .reels import make_reel, pick_music
 from .photos import fetch_article_image, resolve
-from .sources import fetch_candidates
+from .sources import feeds_for, fetch_candidates
 from .writer import Writer, WriterRefusal, build_caption
 
 log = logging.getLogger("viralgram")
@@ -59,13 +59,15 @@ def run(dry_run: bool) -> int:
     s = Settings.from_env()
     history = History(s.history_path)
 
-    stories = fetch_candidates(exclude_ids=history.ids)
+    mode = resolve_mode(s.post_mode)
+    log.info("게시 모드: %s", "웃긴 이야기" if mode == "funny" else "이슈")
+    stories = fetch_candidates(feeds_for(mode), exclude_ids=history.ids)
     if not stories:
         log.error("새 후보가 없습니다.")
         return 1
 
     writer = Writer(s.claude_model, web_research=s.web_research)
-    ranked = writer.rank(stories[:100], history.recent_titles())
+    ranked = writer.rank(stories[:100], history.recent_titles(), mode)
 
     for story in ranked:
         log.info("작성 중: [%s] %s (%s)", story.region, story.title, story.source)

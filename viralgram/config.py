@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,6 +25,14 @@ def _bool(name: str, default: bool) -> bool:
     if value is None or value == "":
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def resolve_mode(mode: str, now: datetime | None = None) -> str:
+    """auto 면 한국시간 17시 전(12:27 게시)은 이슈, 이후(20:57 게시)는 웃긴 글."""
+    if mode in {"issue", "funny"}:
+        return mode
+    now = now or datetime.now(timezone(timedelta(hours=9)))
+    return "issue" if now.astimezone(timezone(timedelta(hours=9))).hour < 17 else "funny"
 
 
 @dataclass
@@ -49,6 +58,7 @@ class Settings:
     font_path: str = ""
     brand_handle: str = ""
     caption_signoff: str = "탐정냥의 사건 보고 끝 🐾"
+    post_mode: str = "auto"  # issue(이슈) | funny(웃긴 글) | auto(한국시간 낮=이슈, 저녁=웃긴 글)
     post_reels: bool = True  # 사진 게시물과 같은 내용을 릴스(슬라이드쇼 영상)로도 올림
 
     history_path: Path = Path("data/posted.json")
@@ -76,6 +86,7 @@ class Settings:
             font_path=env("FONT_PATH", ""),
             brand_handle=env("BRAND_HANDLE", ""),
             caption_signoff=env("CAPTION_SIGNOFF") or "탐정냥의 사건 보고 끝 🐾",
+            post_mode=(env("POST_MODE") or "auto").lower(),
             post_reels=_bool("POST_REELS", True),
             history_path=Path(env("HISTORY_PATH") or "data/posted.json"),
             output_dir=Path(env("OUTPUT_DIR") or "output"),
