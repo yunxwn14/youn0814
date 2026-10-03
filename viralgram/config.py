@@ -59,7 +59,7 @@ class Settings:
     brand_handle: str = ""
     caption_signoff: str = "탐정냥의 사건 보고 끝 🐾"
     post_mode: str = "auto"  # issue(이슈) | funny(웃긴 글) | auto(한국시간 낮=이슈, 저녁=웃긴 글)
-    post_reels: bool = True  # 사진 게시물과 같은 내용을 릴스(슬라이드쇼 영상)로도 올림
+    post_reels: bool = False  # True 면 사진 게시물과 같은 내용을 릴스(무음 슬라이드쇼)로도 자동 게시. 기본은 끔 — 릴스는 앱에서 음악을 붙여 직접 올림
 
     history_path: Path = Path("data/posted.json")
     output_dir: Path = Path("output")
@@ -87,7 +87,7 @@ class Settings:
             brand_handle=env("BRAND_HANDLE", ""),
             caption_signoff=env("CAPTION_SIGNOFF") or "탐정냥의 사건 보고 끝 🐾",
             post_mode=(env("POST_MODE") or "auto").lower(),
-            post_reels=_bool("POST_REELS", True),
+            post_reels=_bool("POST_REELS", False),
             history_path=Path(env("HISTORY_PATH") or "data/posted.json"),
             output_dir=Path(env("OUTPUT_DIR") or "output"),
         )
