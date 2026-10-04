@@ -58,7 +58,8 @@ jobs:
           IMAGE_MODEL: ${{ vars.IMAGE_MODEL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRAND_HANDLE: ${{ vars.BRAND_HANDLE }}
-          POST_MODE: ${{ inputs.mode || 'auto' }}
+          # 깃허브 스케줄이 몇 시간씩 늦게 도는 경우가 있어 시각이 아니라 '어느 스케줄로 켜졌는지'로 주제를 정한다
+          POST_MODE: ${{ inputs.mode || (github.event.schedule == '57 11 * * *' && 'funny') || (github.event.schedule == '27 3 * * *' && 'issue') || 'auto' }}
           FONT_PATH: fonts/NotoSansKR.ttf
           # 웹 검색으로 기사 실제 내용 파악 (끄면 제목만 보고 써서 썸네일이 모호해짐). 끄려면 Variables 에 WEB_RESEARCH=false
           WEB_RESEARCH: ${{ vars.WEB_RESEARCH || 'true' }}
