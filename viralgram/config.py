@@ -38,6 +38,7 @@ def resolve_mode(mode: str, now: datetime | None = None) -> str:
 @dataclass
 class Settings:
     claude_model: str = "claude-sonnet-5"
+    rank_model: str = "claude-haiku-4-5-20251001"  # 후보 순위 선정용 (싼 모델)
     web_research: bool = True
 
     ig_user_id: str = ""
@@ -70,6 +71,7 @@ class Settings:
         env = os.environ.get
         return cls(
             claude_model=env("CLAUDE_MODEL") or "claude-sonnet-5",
+            rank_model=env("RANK_MODEL") or "claude-haiku-4-5-20251001",
             web_research=_bool("WEB_RESEARCH", True),
             ig_user_id=env("IG_USER_ID", ""),
             ig_access_token=env("IG_ACCESS_TOKEN", ""),

@@ -66,7 +66,7 @@ def run(dry_run: bool) -> int:
         log.error("새 후보가 없습니다.")
         return 1
 
-    writer = Writer(s.claude_model, web_research=s.web_research)
+    writer = Writer(s.claude_model, web_research=s.web_research, rank_model=s.rank_model)
     ranked = writer.rank(stories[:100], history.recent_titles(), mode)
 
     for story in ranked:

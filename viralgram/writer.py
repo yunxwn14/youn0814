@@ -146,9 +146,10 @@ _WRITE_FUNNY = (
 
 
 class Writer:
-    def __init__(self, model: str, web_research: bool = True):
+    def __init__(self, model: str, web_research: bool = True, rank_model: str = ""):
         self.client = anthropic.Anthropic()
         self.model = model
+        self.rank_model = rank_model or model  # 후보 순위 선정은 단순 분류라 싼 모델로
         self.web_research = web_research
         self.mode = "issue"  # issue | funny
         self.source_urls: list[str] = []  # 마지막 리서치에서 웹 검색으로 찾은 기사 주소들 (기사 사진용)
@@ -162,10 +163,9 @@ class Writer:
         recent = "\n".join(f"- {t}" for t in recent_titles) or "(없음)"
         self.mode = mode
         response = self.client.messages.parse(
-            model=self.model,
+            model=self.rank_model,
             max_tokens=4000,
             system=SYSTEM,
-            output_config={"effort": "low"},
             messages=[
                 {
                     "role": "user",
