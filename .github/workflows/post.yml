@@ -12,9 +12,9 @@ on:
         type: boolean
         default: false
       mode:
-        description: "주제: auto(낮=이슈, 저녁=웃긴 이야기) / issue / funny"
+        description: "주제: auto(Variables 의 SCHEDULE_MODE 설정을 따름, 기본 정치) / politics / issue / funny"
         type: choice
-        options: [auto, issue, funny]
+        options: [auto, politics, issue, funny]
         default: auto
 
 permissions:
@@ -59,7 +59,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRAND_HANDLE: ${{ vars.BRAND_HANDLE }}
           # 깃허브 스케줄이 몇 시간씩 늦게 도는 경우가 있어 시각이 아니라 '어느 스케줄로 켜졌는지'로 주제를 정한다
-          POST_MODE: ${{ inputs.mode || (github.event.schedule == '57 11 * * *' && 'funny') || (github.event.schedule == '27 3 * * *' && 'issue') || 'auto' }}
+          # SCHEDULE_MODE=split 이면 낮=이슈/저녁=웃긴 이야기, 아니면 두 스케줄 모두 정치 (기본)
+          POST_MODE: ${{ (inputs.mode != 'auto' && inputs.mode) || (vars.SCHEDULE_MODE == 'split' && ((github.event.schedule == '57 11 * * *' && 'funny') || 'issue')) || 'politics' }}
           FONT_PATH: fonts/NotoSansKR.ttf
           # 웹 검색으로 기사 실제 내용 파악 (끄면 제목만 보고 써서 썸네일이 모호해짐). 끄려면 Variables 에 WEB_RESEARCH=false
           WEB_RESEARCH: ${{ vars.WEB_RESEARCH || 'true' }}

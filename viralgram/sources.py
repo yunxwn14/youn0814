@@ -61,11 +61,26 @@ FUNNY_FEEDS: list[tuple[str, str]] = [
     ("해외", "https://www.reddit.com/r/nottheonion/top/.rss?t=day"),
 ]
 
+# 정치: 여야 공방·국회·정부 정책 찬반처럼 댓글이 갈리는 보도 (언론 기사 기반)
+POLITICS_FEEDS: list[tuple[str, str]] = [
+    ("국내", google_news("여야 공방 when:2d")),
+    ("국내", google_news("국정감사 논란 OR 질의 when:2d")),
+    ("국내", google_news("국회 설전 OR 막말 논란 when:2d")),
+    ("국내", google_news("대통령 발언 논란 OR 입장 when:2d")),
+    ("국내", google_news("정부 정책 찬반 논란 when:2d")),
+    ("국내", google_news("여론조사 지지율 when:2d")),
+    ("국내", google_news("정치권 논쟁 OR 갈등 when:2d")),
+    ("국내", google_news("법안 통과 OR 처리 여야 충돌 when:2d")),
+    ("해외", google_news("lawmakers clash OR heated debate when:2d", lang="en")),
+    ("해외", google_news("politician controversy sparks backlash when:2d", lang="en")),
+    ("해외", google_news("president remarks spark debate when:2d", lang="en")),
+]
+
 DEFAULT_FEEDS = ISSUE_FEEDS + FUNNY_FEEDS
 
 
 def feeds_for(mode: str) -> list[tuple[str, str]]:
-    return FUNNY_FEEDS if mode == "funny" else ISSUE_FEEDS
+    return {"funny": FUNNY_FEEDS, "politics": POLITICS_FEEDS}.get(mode, ISSUE_FEEDS)
 
 
 @dataclass

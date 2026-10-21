@@ -236,3 +236,17 @@ def test_same_event_filter_keeps_only_matching_urls():
     assert w._same_event(story, "", urls, {u: "t" for u in urls}) == ["https://a/1", "https://c/3"]
     w.client = SimpleNamespace(messages=SimpleNamespace(parse=lambda **k: 1 / 0))
     assert w._same_event(story, "", urls, {}) == ["https://a/1"]
+
+
+def test_politics_mode_feeds_and_rules():
+    from viralgram.config import resolve_mode
+    from viralgram.sources import feeds_for, POLITICS_FEEDS
+    from viralgram.writer import Writer, SYSTEM
+
+    assert resolve_mode("politics") == "politics"
+    assert feeds_for("politics") is POLITICS_FEEDS
+    w = Writer.__new__(Writer)
+    w.mode = "politics"
+    assert "정치 모드 지침" in w.system and "중립" in w.system
+    w.mode = "issue"
+    assert w.system == SYSTEM

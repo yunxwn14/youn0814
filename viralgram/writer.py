@@ -139,6 +139,25 @@ _RANK_FUNNY = (
 )
 
 
+_RANK_POLITICS = (
+    "오늘은 '정치' 시간입니다. 아래 후보 중 댓글이 많이 달리고 공유될 정치·시사 이야기를 골라 순위를 매겨주세요.\n"
+    "우선순위: ① 여야·진영 간 공방, 국감·국회 설전, 정부 정책을 둘러싼 찬반처럼 '양쪽 입장이 있고 사람들이 갈리는' 사안 "
+    "② 대통령·정치인의 발언·행보 중 파장이 큰 것 ③ 여론조사처럼 숫자로 보이는 흐름.\n"
+    "제외: 근거 없는 루머·의혹 제기만 있는 글, 사생활·가족·외모 소재, 혐오·비하 표현이 핵심인 글, 한쪽 주장만 있고 "
+    "언론 확인이 안 되는 글, 단순 일정·행사 안내.\n"
+)
+_POLITICS_RULES = """
+
+[정치 모드 지침 — 이 지침이 위의 '정치 소재 금지' 원칙보다 우선합니다]
+- 언론이 보도한 사실만 씁니다. 원문에 없는 발언·수치·인물을 만들지 않고, 따옴표 발언은 기사에 나온 그대로만 인용합니다.
+- 진영 어느 쪽도 편들거나 조롱하지 않습니다. 제목·본문·한마디 모두 중립. 갈등 사안이면 양측 입장을 함께 담습니다 (예: 여당 '○○' vs 야당 '△△').
+- 확정되지 않은 일은 단정하지 않습니다. 의혹은 '의혹 제기'와 해명·반박을 함께 쓰고, 수사·재판 중이면 '혐의'로 표현합니다.
+- 제목은 자극적이어도 사실을 왜곡하거나 낚지 않습니다. 누가·무엇을·어떻게가 보이게 쓰되 결과를 부풀리지 않습니다.
+- 특정 정당·후보에 대한 투표·지지·비방 호소, 사생활·가족·외모 공격, 혐오 표현은 쓰지 않습니다.
+- 탐정냥 한마디(quip)는 조롱 없는 중립 질문으로 댓글을 유도합니다. 30자 이내 (예: '찬성 vs 반대, 냥심은 어느 쪽?', '여러분 생각은 어떤가옹?').
+- 정치인 얼굴을 AI로 그리지 않습니다. 메인 이미지는 항상 기사 사진(article)."""
+_WRITE_POLITICS = "오늘은 '정치' 시간입니다. 위 정치 모드 지침을 반드시 지키세요.\n"
+
 _WRITE_FUNNY = (
     "오늘은 '웃긴 이야기' 시간입니다. 썸네일 제목은 웃긴 상황·반전이 한눈에 보이게, 탐정냥 한마디는 "
     "더 과감하게 드립을 치세요 (조롱·비하 없이 상황 자체를 웃기게).\n"
@@ -151,8 +170,12 @@ class Writer:
         self.model = model
         self.rank_model = rank_model or model  # 후보 순위 선정은 단순 분류라 싼 모델로
         self.web_research = web_research
-        self.mode = "issue"  # issue | funny
+        self.mode = "issue"  # issue | funny | politics
         self.source_urls: list[str] = []  # 마지막 리서치에서 웹 검색으로 찾은 기사 주소들 (기사 사진용)
+
+    @property
+    def system(self) -> str:
+        return SYSTEM + _POLITICS_RULES if self.mode == "politics" else SYSTEM
 
     # ── 1) 후보 선정 ─────────────────────────────────────
     def rank(self, stories: list[Story], recent_titles: list[str], mode: str = "issue") -> list[Story]:
@@ -165,12 +188,12 @@ class Writer:
         response = self.client.messages.parse(
             model=self.rank_model,
             max_tokens=4000,
-            system=SYSTEM,
+            system=self.system,
             messages=[
                 {
                     "role": "user",
                     "content": (
-                        (_RANK_FUNNY if mode == "funny" else _RANK_ISSUE)
+                        {"funny": _RANK_FUNNY, "politics": _RANK_POLITICS}.get(mode, _RANK_ISSUE)
                         + "밋밋한 미담, 기업·지자체 홍보성 기사, 정책 발표, 정보가 너무 적어 이야기가 안 되는 후보는 제외하세요.\n"
                         "최근 게시물과 비슷한 소재는 피해주세요.\n\n"
                         f"## 최근 게시한 제목\n{recent}\n\n## 후보\n{listing}"
@@ -196,7 +219,10 @@ class Writer:
                 "content": (
                     "다음 기사를 웹에서 찾아 실제로 무슨 일이 있었는지 구체적으로 정리해주세요. 검색은 꼭 필요한 만큼만.\n"
                     "제목이 '이것', '이렇게'처럼 핵심을 숨겼다면 그게 정확히 무엇인지 반드시 밝혀주세요.\n"
-                    "누가/무엇을/얼마나/왜/결말, 사람들 반응, 매체명, 원문 기사 URL 을 짧은 bullet 로.\n\n"
+                    "누가/무엇을/얼마나/왜/결말, 사람들 반응, 매체명, 원문 기사 URL 을 짧은 bullet 로.\n"
+                    + ("정치 사안이므로 여러 언론이 같은 내용을 보도했는지, 여야·관련 당사자 각각의 입장과 해명·반박, "
+                       "확정된 사실과 의혹 단계의 내용을 구분해 정리하세요.\n" if self.mode == "politics" else "")
+                    + "\n"
                     f"제목: {story.title}\n요약: {story.summary}\n출처: {story.source}\n링크: {story.link}"
                 ),
             }
@@ -250,14 +276,14 @@ class Writer:
         response = self.client.messages.parse(
             model=self.model,
             max_tokens=16000,
-            system=SYSTEM,
+            system=self.system,
             messages=[
                 {
                     "role": "user",
                     "content": (
                         "아래 이야기로 인스타그램 게시물(썸네일 제목 + 짧은 캡션)을 써주세요.\n"
                         f"이 이야기는 {story.region} 소식입니다.\n"
-                        + (_WRITE_FUNNY if self.mode == "funny" else "")
+                        + {"funny": _WRITE_FUNNY, "politics": _WRITE_POLITICS}.get(self.mode, "")
                         + "\n"
                         f"## 원문 정보\n제목: {story.title}\n요약: {story.summary}\n"
                         f"매체: {story.source}\n링크: {story.link}\n\n"

@@ -76,6 +76,9 @@ def run(dry_run: bool) -> int:
         except WriterRefusal as exc:
             log.warning("건너뜀 (%s)", exc)
             continue
+        if mode == "politics" and len(writer.source_urls) < 2:
+            log.warning("건너뜀 (정치 사안인데 같은 내용을 보도한 기사가 2곳 미만): %s", story.title)
+            continue
         # 기사 사진이 구해지는 이야기만 쓴다 (원고 쓰기 전에 확인해 비용 절약)
         used: set[str] = set()
         cover = fetch_article_image(writer.source_urls, story.source or "원문 기사", used)

@@ -29,7 +29,7 @@ def _bool(name: str, default: bool) -> bool:
 
 def resolve_mode(mode: str, now: datetime | None = None) -> str:
     """auto 면 한국시간 17시 전(12:27 게시)은 이슈, 이후(20:57 게시)는 웃긴 글."""
-    if mode in {"issue", "funny"}:
+    if mode in {"issue", "funny", "politics"}:
         return mode
     now = now or datetime.now(timezone(timedelta(hours=9)))
     return "issue" if now.astimezone(timezone(timedelta(hours=9))).hour < 17 else "funny"
@@ -59,7 +59,7 @@ class Settings:
     font_path: str = ""
     brand_handle: str = ""
     caption_signoff: str = "탐정냥의 사건 보고 끝 🐾"
-    post_mode: str = "auto"  # issue(이슈) | funny(웃긴 글) | auto(한국시간 낮=이슈, 저녁=웃긴 글)
+    post_mode: str = "auto"  # issue(이슈) | funny(웃긴 글) | politics(정치) | auto(한국시간 낮=이슈, 저녁=웃긴 글)
     post_reels: bool = True  # 사진 게시물과 같은 내용을 릴스(슬라이드쇼 영상)로도 자동 게시 (POST_REELS=false 로 끔). music/ 폴더에 음원이 있으면 배경음악으로 깔림
 
     history_path: Path = Path("data/posted.json")
