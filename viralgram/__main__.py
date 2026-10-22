@@ -13,9 +13,9 @@ from .history import History
 from .hosting import upload_all, upload_catbox, upload_github
 from .instagram import Instagram, InstagramError
 from .reels import make_reel, pick_music
-from .photos import fetch_article_image, resolve
+from .photos import fetch_article_image, generate_ai_image, resolve, typographic_background
 from .sources import feeds_for, fetch_candidates
-from .writer import POLITICAL_MODES, Writer, WriterRefusal, build_caption
+from .writer import ART_STYLE, POLITICAL_MODES, Writer, WriterRefusal, build_caption
 
 log = logging.getLogger("viralgram")
 
@@ -80,8 +80,21 @@ def run(dry_run: bool) -> int:
         if mode in POLITICAL_MODES and len(writer.source_urls) < 2:
             log.warning("건너뜀 (정치 사안인데 같은 내용을 보도한 기사가 2곳 미만): %s", story.title)
             continue
-        # 기사 사진이 구해지는 이야기만 쓴다 (원고 쓰기 전에 확인해 비용 절약)
         used: set[str] = set()
+        if mode in POLITICAL_MODES:
+            # 정치: 기사 사진 대신 AI 일러스트 (저작권·초상권 문제 회피). 못 만들면 글씨만 있는 표지
+            try:
+                card = writer.write(story, notes)
+            except WriterRefusal as exc:
+                log.warning("건너뜀 (%s)", exc)
+                continue
+            a = generate_ai_image(ART_STYLE + card.image_a.ai_prompt, s.openai_api_key, s.image_model)
+            if a is None:
+                log.warning("AI 이미지 생성 실패 → 글씨만 있는 표지로 대체")
+                a = typographic_background()
+            b = extra = None
+            break
+        # 기사 사진이 구해지는 이야기만 쓴다 (원고 쓰기 전에 확인해 비용 절약)
         cover = fetch_article_image(writer.source_urls, story.source or "원문 기사", used)
         if cover is None:
             log.warning("건너뜀 (기사 사진을 구하지 못함): %s", story.title)
@@ -104,7 +117,7 @@ def run(dry_run: bool) -> int:
     images = Renderer(s.font_path, brand).render(card, out_dir, a, b, [extra], mode=mode)
     used = [p for p in (a, b, extra) if p]
     political = mode in POLITICAL_MODES
-    caption = build_caption(card, [p.credit for p in used], "" if political else s.caption_signoff,
+    caption = build_caption(card, [p.credit for p in used if p.credit], "" if political else s.caption_signoff,
                             quip_label="💬 한마디" if political else "🐾 탐정냥 한마디")
     (out_dir / "caption.txt").write_text(caption, encoding="utf-8")
 

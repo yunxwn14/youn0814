@@ -184,6 +184,19 @@ def generate_ai_image(prompt: str, api_key: str, model: str = "gpt-image-1") -> 
     return _generate_pollinations(prompt)
 
 
+def typographic_background(size: tuple[int, int] = (1080, 1350)) -> Photo:
+    """AI 이미지를 못 만들었을 때 쓰는 깔끔한 단색 그라데이션 배경 (글씨만으로 구성되는 표지)."""
+    w, h = size
+    img = Image.new("RGB", size, "#16213A")
+    px = img.load()
+    for y in range(h):
+        k = y / h
+        c = (int(22 + 26 * (1 - k)), int(33 + 30 * (1 - k)), int(58 + 44 * (1 - k)))
+        for x in range(w):
+            px[x, y] = c
+    return Photo(img, "")
+
+
 def _generate_pollinations(prompt: str) -> Photo | None:
     """pollinations.ai 무료 이미지 생성 (가입·키 불필요, 느리거나 실패할 수 있음)."""
     url = (f"https://image.pollinations.ai/prompt/{quote(prompt)}"

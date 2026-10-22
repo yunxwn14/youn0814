@@ -283,7 +283,14 @@ class Renderer:
         label_a = card.image_a.label if card.image_a else ""
         label_b = card.image_b.label if card.image_b else ""
         tag = {"satire": "정치 밈", "explainer": "쉬운 해설", "politics": "정치"}.get(mode, "")
-        pages = [self.thumbnail(card.headline, self.compose(layout, a, b, label_a, label_b), tag, accent=bool(tag))]
+        if tag and a is not None:
+            # 정치 모드: 직접 만든 AI 일러스트(또는 단색 표지)라 잘라서 화면을 꽉 채운다
+            bg = ImageOps.fit(a.image.convert("RGB"), (W, H), Image.LANCZOS, centering=(0.5, 0.35))
+            if a.ai:
+                self._ai_tag(bg, (0, 0, W, H))
+        else:
+            bg = self.compose(layout, a, b, label_a, label_b)
+        pages = [self.thumbnail(card.headline, bg, tag, accent=bool(tag))]
         if mode == "explainer" and card.steps:
             steps = card.steps[:4]
             pages += [self.explain_page(s.title, s.text, i, len(steps)) for i, s in enumerate(steps, 1)]

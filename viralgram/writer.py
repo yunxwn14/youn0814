@@ -75,6 +75,12 @@ class CardNews(BaseModel):
         return [q for q in (spec.stock_query for spec in specs) if q.strip()]
 
 
+ART_STYLE = (
+    "Clean flat editorial vector illustration, minimal composition, soft muted palette of navy, warm beige, mustard and teal, "
+    "faceless simplified human figures, generous empty space in the lower third, no text, no letters, no numbers, no logos, "
+    "no flags, no real people, no likeness of any politician, no strong red-versus-blue contrast. Scene: "
+)
+
 SYSTEM = """당신은 한국 인스타그램 이슈 매거진 계정의 에디터입니다.
 국내외에서 "헐 이게 실화?" 소리가 나오는 이야기를 골라, 썸네일 한 장으로 공유와 댓글을 유도합니다.
 
@@ -164,7 +170,10 @@ _POLITICS_RULES = """
 - 제목은 자극적이어도 사실을 왜곡하거나 낚지 않습니다. 누가·무엇을·어떻게가 보이게 쓰되 결과를 부풀리지 않습니다.
 - 특정 정당·후보에 대한 투표·지지·비방 호소, 사생활·가족·외모 공격, 혐오 표현은 쓰지 않습니다.
 - 탐정냥 한마디(quip)는 조롱 없는 중립 질문으로 댓글을 유도합니다. 30자 이내 (예: '찬성 vs 반대, 냥심은 어느 쪽?', '여러분 생각은 어떤가옹?').
-- 정치인 얼굴을 AI로 그리지 않습니다. 메인 이미지는 항상 기사 사진(article)."""
+- 이미지는 저작권·초상권 문제가 없도록 AI 일러스트만 씁니다: image_a.source 는 반드시 "ai", layout 은 "single", image_b 는 null.
+  ai_prompt(영어)에는 사건을 '상징적으로' 묘사합니다. 일반적인 공간(국회 본회의장 같은 넓은 홀, 회의 테이블)과 상징물(마이크, 서류 더미, 저울, 타이머, 말풍선 없는 빈 연단)을
+  얼굴 없는 단순화된 인물로 그립니다. 실존 인물·특정 정치인 닮은꼴·정당 로고·정당 색 대비·국기·글씨·숫자는 절대 넣지 않습니다.
+  stock_query 는 빈 문자열이어도 됩니다."""
 _WRITE_POLITICS = "오늘은 '정치' 시간입니다. 위 정치 모드 지침을 반드시 지키세요.\n"
 
 POLITICAL_MODES = {"politics", "satire", "explainer"}
@@ -388,6 +397,11 @@ def validate_card(card: CardNews, mode: str = "") -> str:
             return "무료 사진 검색어가 비어 있음"
     if card.layout != "single" and card.image_b is None:
         return f"{card.layout} 레이아웃인데 두 번째 이미지가 없음"
+    if mode in POLITICAL_MODES:
+        if card.image_a.source != "ai" or not card.image_a.ai_prompt.strip():
+            return "정치 모드는 AI 일러스트 프롬프트가 필요함"
+        if card.image_b is not None or card.layout != "single":
+            return "정치 모드는 single 레이아웃, 이미지 1장만 사용"
     if mode == "explainer" and not 3 <= len(card.steps) <= 5:
         return f"해설 카드 수 이상 ({len(card.steps)}장, 3~4장 필요)"
     return ""
@@ -408,7 +422,7 @@ def build_caption(card: CardNews, photo_credits: list[str] | None = None, signof
     if photo_credits:
         credit += "\n사진: " + ", ".join(dict.fromkeys(photo_credits))
         if "AI 생성 이미지" in photo_credits:
-            credit += "\n※ 일부 이미지는 AI로 생성한 이미지입니다."
+            credit += "\n※ 이미지는 AI로 생성한 일러스트이며 실제 장면이 아닙니다."
     parts.append(credit.strip())
     if tags:
         parts.append(" ".join(tags[:max_hashtags]))

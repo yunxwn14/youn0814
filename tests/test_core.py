@@ -268,7 +268,7 @@ def test_political_mode_satire_weekdays_explainer_sunday_first_post():
 def test_explainer_needs_steps_and_renders_pages(tmp_path):
     from viralgram.writer import CardNews, ExplainStep, ImageSpec, validate_card
 
-    spec = ImageSpec(source="article", stock_query="", ai_prompt="", label="")
+    spec = ImageSpec(source="ai", stock_query="", ai_prompt="a wide empty hall with a podium", label="")
     base = dict(headline="국정감사 '핵심' 쉽게 정리\n여야는 뭐라고 했나", body="가" * 60, quip="q", hashtags=["#a"],
                 source_credit="출처: 연합뉴스", article_url="", layout="single", image_a=spec, image_b=None)
     assert "해설 카드" in validate_card(CardNews(**base), "explainer")
@@ -278,3 +278,18 @@ def test_explainer_needs_steps_and_renders_pages(tmp_path):
     r = Renderer("fonts/NotoSansKR.ttf", "@x")
     paths = r.render(card, tmp_path, Photo(Image.new("RGB", (1200, 800), "#446"), "A"), None, [None], mode="explainer")
     assert len(paths) == 1 + 3 + 1  # 썸네일 + 해설 3장 + 팔로우
+
+
+def test_politics_requires_ai_illustration_and_fallback_cover(tmp_path):
+    from viralgram.photos import typographic_background
+    from viralgram.writer import CardNews, ImageSpec, validate_card
+
+    article = ImageSpec(source="article", stock_query="", ai_prompt="", label="")
+    base = dict(headline="국감 질의 '6분' 답변은 '40초'\n이게 소통이냐 소환이냐", body="가" * 60, quip="q", hashtags=["#a"],
+                source_credit="출처: 연합뉴스", article_url="", layout="single", image_b=None)
+    assert "AI 일러스트" in validate_card(CardNews(image_a=article, **base), "satire")
+    ai = ImageSpec(source="ai", stock_query="", ai_prompt="an empty hall", label="")
+    assert validate_card(CardNews(image_a=ai, **base), "satire") == ""
+    r = Renderer("fonts/NotoSansKR.ttf", "@x")
+    paths = r.render(CardNews(image_a=ai, **base), tmp_path, typographic_background(), None, [None], mode="satire")
+    assert len(paths) == 2
