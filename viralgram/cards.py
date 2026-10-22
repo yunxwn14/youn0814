@@ -170,13 +170,12 @@ class Renderer:
 
     # ── 페이지 ────────────────────────────────────────────
     def _clean_headline(self, img: Image.Image, lines: list[str], y: int, size: int) -> None:
-        """정치 모드 제목: 흰색 한 가지, 서체 한 가지. 핵심어(작은따옴표)는 굵기 대비 + 가는 밑줄로 강조하고,
+        """정치 모드 제목: 흰색 한 가지, 서체 한 가지. 핵심어(작은따옴표)는 굵기 대비로만 강조하고,
         가독성은 외곽선 대신 부드러운 그림자로 확보한다. 큰 제목이라 행간은 촘촘하게(1.14)."""
         regular, heavy = self.font(size, "Medium"), self.font(size, "Black")
         line_h = int(size * 1.14)
         shadow = Image.new("L", img.size, 0)
         sd, d = ImageDraw.Draw(shadow), ImageDraw.Draw(img)
-        underline = []
         runs = []
         for i, line in enumerate(lines):
             x, ly = MARGIN_X, y + i * line_h
@@ -188,20 +187,14 @@ class Renderer:
                 f = heavy if hot else regular
                 runs.append(((x, ly), seg, f))
                 w = d.textlength(seg, font=f)
-                if hot:
-                    underline.append((x, ly + int(size * 1.16), x + w, ly + int(size * 1.16) + 5))
                 x += w
         for xy, seg, f in runs:
             sd.text((xy[0] + 2, xy[1] + 4), seg, font=f, fill=255)
-        for box in underline:
-            sd.rectangle(box, fill=255)
         shadow = shadow.filter(ImageFilter.GaussianBlur(9)).point(lambda v: int(v * 0.85))
         img.paste(Image.new("RGB", img.size, "#000000"), (0, 0), shadow)
         d = ImageDraw.Draw(img)
         for xy, seg, f in runs:
             d.text(xy, seg, font=f, fill="#FFFFFF")
-        for box in underline:
-            d.rectangle(box, fill="#FFFFFF")
 
     def _tag(self, img: Image.Image, text: str) -> None:
         """왼쪽 위 코너 라벨 (예: '쉬운 해설'): 흰 알약 + 검정 글씨."""
@@ -281,7 +274,6 @@ class Renderer:
         for line in self._wrap(draw, title, tf, W - 2 * MARGIN_X)[:2]:
             draw.text((MARGIN_X, y), line, font=tf, fill="#FFFFFF")
             y += 112
-        draw.rectangle((MARGIN_X, y + 10, MARGIN_X + 120, y + 18), fill="#FFFFFF")
         bf = self.font(58, "Bold")
         y += 90
         for line in self._wrap(draw, text, bf, W - 2 * MARGIN_X)[:9]:
