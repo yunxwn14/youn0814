@@ -24,6 +24,7 @@ log = logging.getLogger(__name__)
 
 W, H = 1080, 1350
 MARGIN_X = 90
+ACCENT = "#D7261E"  # 정치 모드 강조색 (빨강). 노랑은 쓰지 않음
 BOTTOM = 190  # 제목 마지막 줄 아래 여백
 
 FONT_CANDIDATES = [
@@ -163,15 +164,23 @@ class Renderer:
     # ── 페이지 ────────────────────────────────────────────
     def _accent_line(self, draw: ImageDraw.ImageDraw, xy: tuple[int, int], line: str,
                      font: ImageFont.FreeTypeFont) -> None:
-        """작은따옴표로 감싼 핵심어는 따옴표를 빼고 노란색으로 강조해 그린다 (굵은 검정 외곽선)."""
+        """핵심어(작은따옴표)는 따옴표를 빼고 빨간 자막 박스 위 흰 글씨로, 나머지는 흰 글씨 + 얇은 외곽선."""
         x, y = xy
+        pad = 14
         for seg in re.split(r"('[^']*')", line):
             if not seg:
                 continue
             hot = seg.startswith("'") and seg.endswith("'") and len(seg) > 2
             seg = seg.strip("'") if hot else seg.replace("'", "")
-            draw.text((x, y), seg, font=font, fill="#FFE14A" if hot else "#FFFFFF", stroke_width=7, stroke_fill="#000000")
-            x += draw.textlength(seg, font=font) + 0
+            w = draw.textlength(seg, font=font)
+            if hot:
+                l, tp, r, bt = draw.textbbox((x, y), seg, font=font)
+                draw.rectangle((l - pad, tp - 10, r + pad, bt + 10), fill=ACCENT)
+                draw.text((x, y), seg, font=font, fill="#FFFFFF")
+                x += w + pad
+            else:
+                draw.text((x, y), seg, font=font, fill="#FFFFFF", stroke_width=4, stroke_fill="#000000")
+                x += w
 
     def _tag(self, img: Image.Image, text: str) -> None:
         """왼쪽 위 코너 라벨 (예: '정치 밈', '쉬운 해설')."""
@@ -232,7 +241,7 @@ class Renderer:
             font = self.font(52, "Black")
             lines = self._wrap(draw, quip, font, W - 2 * MARGIN_X)[:3]
             y = free_top + (H - free_top - 60 - 74 * len(lines)) // 2 + 60
-            draw.text((MARGIN_X, y - 56), "🐾 탐정냥 한마디".replace("🐾 ", ""), font=self.font(36, "Bold"), fill="#FFD84D")
+            draw.text((MARGIN_X, y - 56), "🐾 탐정냥 한마디".replace("🐾 ", ""), font=self.font(36, "Bold"), fill="#FFFFFF")
             for line in lines:
                 draw.text((MARGIN_X, y + 20), line, font=font, fill="#FFFFFF", stroke_width=1, stroke_fill="#000000")
                 y += 74
@@ -242,7 +251,7 @@ class Renderer:
         """쉬운 해설 카드: 어두운 배경에 소제목 + 본문 + 진행 표시."""
         img = Image.new("RGB", (W, H), "#14161F")
         draw = ImageDraw.Draw(img)
-        draw.text((MARGIN_X, 150), f"{index} / {total}", font=self.font(44, "Bold"), fill="#FFD84D", anchor="ls")
+        draw.text((MARGIN_X, 150), f"{index} / {total}", font=self.font(44, "Bold"), fill="#FF6B63", anchor="ls")
         tf = self.display(96)
         y = 290
         for line in self._wrap(draw, title, tf, W - 2 * MARGIN_X)[:2]:
@@ -270,14 +279,14 @@ class Renderer:
         draw = ImageDraw.Draw(img)
         cx = W // 2
         draw.text((cx, 470), lines[0], font=self.display(112), fill="#FFFFFF", anchor="mm")
-        draw.text((cx, 600), lines[1], font=self.display(112), fill="#FFD84D", anchor="mm")
+        draw.text((cx, 600), lines[1], font=self.display(112), fill="#FF6B63", anchor="mm")
         draw.text((cx, 790), lines[2], font=self.font(54, "Bold"), fill="#FFFFFF", anchor="mm")
         draw.text((cx, 870), lines[3], font=self.font(54, "Bold"), fill="#FFFFFF", anchor="mm")
         if self.brand:
             f = self.font(60, "Black")
             tw = draw.textlength(self.brand, font=f)
-            draw.rounded_rectangle((cx - tw / 2 - 40, 990, cx + tw / 2 + 40, 1100), radius=55, fill="#FFD84D")
-            draw.text((cx, 1045), self.brand, font=f, fill="#111111", anchor="mm")
+            draw.rounded_rectangle((cx - tw / 2 - 40, 990, cx + tw / 2 + 40, 1100), radius=55, fill=ACCENT)
+            draw.text((cx, 1045), self.brand, font=f, fill="#FFFFFF", anchor="mm")
         draw.text((cx, 1190), "저장 · 공유도 큰 힘이 됩니다", font=self.font(40, "Bold"),
                   fill="#CCCCCC", anchor="mm")
         return img
