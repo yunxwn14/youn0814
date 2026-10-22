@@ -60,6 +60,8 @@ def fit_whole(img: Image.Image, size: tuple[int, int], anchor: float = 0.5) -> I
 class Renderer:
     def __init__(self, font_path: str, brand: str = ""):
         self.font_path = find_font(font_path)
+        # 정치 모드 제목용 굵은 디스플레이 서체 (없으면 기본 서체)
+        self.display_path = next((p for p in ("fonts/BlackHanSans.ttf",) if Path(p).exists()), "")
         self.brand = brand if not brand or brand.startswith("@") else f"@{brand}"
 
     def font(self, size: int, weight: str = "Bold") -> ImageFont.FreeTypeFont:
@@ -69,6 +71,9 @@ class Renderer:
         except (OSError, ValueError, AttributeError):
             pass
         return f
+
+    def display(self, size: int) -> ImageFont.FreeTypeFont:
+        return ImageFont.truetype(self.display_path, size) if self.display_path else self.font(size, "Black")
 
     @staticmethod
     def _shade(img: Image.Image) -> Image.Image:
@@ -80,15 +85,15 @@ class Renderer:
             mask.putpixel((0, y), int(235 * min(1.0, t * 1.4) ** 1.3))
         return Image.composite(Image.new("RGB", (W, H), "#000000"), img, mask.resize((W, H)))
 
-    def _headline_font(self, draw: ImageDraw.ImageDraw, lines: list[str]) -> ImageFont.FreeTypeFont:
-        """가장 긴 줄이 가로 폭에 들어가도록 글자 크기를 줄인다 (최대 116px)."""
-        size = 116
+    def _headline_font(self, draw: ImageDraw.ImageDraw, lines: list[str], bold: bool = False) -> ImageFont.FreeTypeFont:
+        """가장 긴 줄이 가로 폭에 들어가도록 글자 크기를 줄인다 (최대 116px, 디스플레이 서체는 132px)."""
+        size = 132 if bold else 116
         while size > 56:
-            f = self.font(size, "Black")
+            f = self.display(size) if bold else self.font(size, "Black")
             if max(draw.textlength(line, font=f) for line in lines) <= W - 2 * MARGIN_X:
                 return f
             size -= 4
-        return self.font(size, "Black")
+        return self.display(size) if bold else self.font(size, "Black")
 
     # ── 배경 구성 ─────────────────────────────────────────
     def _ai_tag(self, img: Image.Image, box: tuple[int, int, int, int]) -> None:
@@ -158,14 +163,15 @@ class Renderer:
     # ── 페이지 ────────────────────────────────────────────
     def _accent_line(self, draw: ImageDraw.ImageDraw, xy: tuple[int, int], line: str,
                      font: ImageFont.FreeTypeFont) -> None:
-        """작은따옴표로 감싼 핵심어를 노란색으로 강조해 그린다."""
+        """작은따옴표로 감싼 핵심어는 따옴표를 빼고 노란색으로 강조해 그린다 (굵은 검정 외곽선)."""
         x, y = xy
         for seg in re.split(r"('[^']*')", line):
             if not seg:
                 continue
-            color = "#FFD84D" if seg.startswith("'") and seg.endswith("'") and len(seg) > 2 else "#FFFFFF"
-            draw.text((x, y), seg, font=font, fill=color, stroke_width=1, stroke_fill="#000000")
-            x += draw.textlength(seg, font=font)
+            hot = seg.startswith("'") and seg.endswith("'") and len(seg) > 2
+            seg = seg.strip("'") if hot else seg.replace("'", "")
+            draw.text((x, y), seg, font=font, fill="#FFE14A" if hot else "#FFFFFF", stroke_width=7, stroke_fill="#000000")
+            x += draw.textlength(seg, font=font) + 0
 
     def _tag(self, img: Image.Image, text: str) -> None:
         """왼쪽 위 코너 라벨 (예: '정치 밈', '쉬운 해설')."""
@@ -179,11 +185,12 @@ class Renderer:
         img = self._shade(background)
         draw = ImageDraw.Draw(img)
         lines = [line.strip() for line in headline.split("\n") if line.strip()][:3] or [headline]
-        font = self._headline_font(draw, lines)
-        line_h = int(font.size * 1.22)
+        font = self._headline_font(draw, lines, bold=accent)
+        line_h = int(font.size * (1.25 if accent else 1.22))
         y = H - BOTTOM - line_h * len(lines)
         if self.brand:
-            draw.text((MARGIN_X, y - 30), self.brand, font=self.font(46, "Bold"), fill="#FFFFFF", anchor="ls")
+            draw.text((MARGIN_X, y - 30), self.brand, font=self.font(46, "Bold"), fill="#FFFFFF", anchor="ls",
+                      stroke_width=3 if accent else 0, stroke_fill="#000000")
         for line in lines:
             if accent:
                 self._accent_line(draw, (MARGIN_X, y), line, font)
@@ -236,7 +243,7 @@ class Renderer:
         img = Image.new("RGB", (W, H), "#14161F")
         draw = ImageDraw.Draw(img)
         draw.text((MARGIN_X, 150), f"{index} / {total}", font=self.font(44, "Bold"), fill="#FFD84D", anchor="ls")
-        tf = self.font(88, "Black")
+        tf = self.display(96)
         y = 290
         for line in self._wrap(draw, title, tf, W - 2 * MARGIN_X)[:2]:
             draw.text((MARGIN_X, y), line, font=tf, fill="#FFFFFF")
@@ -262,8 +269,8 @@ class Renderer:
             img = Image.new("RGB", (W, H), "#1B1B1F")
         draw = ImageDraw.Draw(img)
         cx = W // 2
-        draw.text((cx, 470), lines[0], font=self.font(104, "Black"), fill="#FFFFFF", anchor="mm")
-        draw.text((cx, 600), lines[1], font=self.font(104, "Black"), fill="#FFD84D", anchor="mm")
+        draw.text((cx, 470), lines[0], font=self.display(112), fill="#FFFFFF", anchor="mm")
+        draw.text((cx, 600), lines[1], font=self.display(112), fill="#FFD84D", anchor="mm")
         draw.text((cx, 790), lines[2], font=self.font(54, "Bold"), fill="#FFFFFF", anchor="mm")
         draw.text((cx, 870), lines[3], font=self.font(54, "Bold"), fill="#FFFFFF", anchor="mm")
         if self.brand:
@@ -282,15 +289,16 @@ class Renderer:
         layout = card.layout if b is not None else "single"
         label_a = card.image_a.label if card.image_a else ""
         label_b = card.image_b.label if card.image_b else ""
-        tag = {"satire": "정치 밈", "explainer": "쉬운 해설", "politics": "정치"}.get(mode, "")
-        if tag and a is not None and (a.ai or not a.credit):
+        political = mode in {"satire", "explainer", "politics"}
+        tag = {"explainer": "쉬운 해설"}.get(mode, "")  # 풍자·정치 뉴스는 라벨 없이 제목만
+        if political and a is not None and (a.ai or not a.credit):
             # 정치 모드: AI 장면(또는 단색 표지)은 잘라서 화면을 꽉 채운다. 기사 사진은 자르지 않고 전체를 보여준다
             bg = ImageOps.fit(a.image.convert("RGB"), (W, H), Image.LANCZOS, centering=(0.5, 0.35))
             if a.ai:
                 self._ai_tag(bg, (0, 0, W, H))
         else:
             bg = self.compose(layout, a, b, label_a, label_b)
-        pages = [self.thumbnail(card.headline, bg, tag, accent=bool(tag))]
+        pages = [self.thumbnail(card.headline, bg, tag, accent=political)]
         if mode == "explainer" and card.steps:
             steps = card.steps[:4]
             pages += [self.explain_page(s.title, s.text, i, len(steps)) for i, s in enumerate(steps, 1)]

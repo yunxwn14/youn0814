@@ -42,6 +42,8 @@ jobs:
           mkdir -p fonts
           curl -sSL -o fonts/NotoSansKR.ttf \
             "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanskr/NotoSansKR%5Bwght%5D.ttf"
+          curl -sSL -o fonts/BlackHanSans.ttf \
+            "https://raw.githubusercontent.com/google/fonts/main/ofl/blackhansans/BlackHanSans-Regular.ttf"
 
       - name: 실행
         env:
