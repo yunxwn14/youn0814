@@ -293,3 +293,15 @@ def test_politics_requires_ai_illustration_and_fallback_cover(tmp_path):
     r = Renderer("fonts/NotoSansKR.ttf", "@x")
     paths = r.render(CardNews(image_a=ai, **base), tmp_path, typographic_background(), None, [None], mode="satire")
     assert len(paths) == 2
+
+
+def test_politics_rejects_family_headlines():
+    from viralgram.writer import CardNews, ImageSpec, validate_card
+
+    ai = ImageSpec(source="ai", stock_query="", ai_prompt="an empty hall", label="")
+    base = dict(body="가" * 60, quip="q", hashtags=["#a"], source_credit="출처: 연합뉴스", article_url="",
+                layout="single", image_a=ai, image_b=None)
+    bad = CardNews(headline="'김혜경 여사' 증인신청\n결국 국감 명단서 빠졌다", **base)
+    assert "가족" in validate_card(bad, "explainer")
+    ok = CardNews(headline="국회 운영위 증인 명단 '표결'\n야당 신청 증인은 '제외'", **base)
+    assert "가족" not in validate_card(ok, "satire")
