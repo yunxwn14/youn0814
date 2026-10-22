@@ -24,7 +24,6 @@ log = logging.getLogger(__name__)
 
 W, H = 1080, 1350
 MARGIN_X = 90
-ACCENT = "#D7261E"  # 정치 모드 강조색 (빨강). 노랑은 쓰지 않음
 BOTTOM = 190  # 제목 마지막 줄 아래 여백
 
 FONT_CANDIDATES = [
@@ -61,8 +60,6 @@ def fit_whole(img: Image.Image, size: tuple[int, int], anchor: float = 0.5) -> I
 class Renderer:
     def __init__(self, font_path: str, brand: str = ""):
         self.font_path = find_font(font_path)
-        # 정치 모드 제목용 굵은 디스플레이 서체 (없으면 기본 서체)
-        self.display_path = next((p for p in ("fonts/BlackHanSans.ttf",) if Path(p).exists()), "")
         self.brand = brand if not brand or brand.startswith("@") else f"@{brand}"
 
     def font(self, size: int, weight: str = "Bold") -> ImageFont.FreeTypeFont:
@@ -74,7 +71,7 @@ class Renderer:
         return f
 
     def display(self, size: int) -> ImageFont.FreeTypeFont:
-        return ImageFont.truetype(self.display_path, size) if self.display_path else self.font(size, "Black")
+        return self.font(size, "ExtraBold")
 
     @staticmethod
     def _shade(img: Image.Image) -> Image.Image:
@@ -85,6 +82,16 @@ class Renderer:
             t = max(0.0, (y - start) / (H - start))
             mask.putpixel((0, y), int(235 * min(1.0, t * 1.4) ** 1.3))
         return Image.composite(Image.new("RGB", (W, H), "#000000"), img, mask.resize((W, H)))
+
+    def _clean_size(self, draw: ImageDraw.ImageDraw, lines: list[str]) -> int:
+        plain = [re.sub(r"'", "", ln) for ln in lines]
+        size = 108
+        while size > 56:
+            f = self.font(size, "Black")
+            if max(draw.textlength(ln, font=f) for ln in plain) <= W - 2 * MARGIN_X:
+                break
+            size -= 4
+        return size
 
     def _headline_font(self, draw: ImageDraw.ImageDraw, lines: list[str], bold: bool = False) -> ImageFont.FreeTypeFont:
         """가장 긴 줄이 가로 폭에 들어가도록 글자 크기를 줄인다 (최대 116px, 디스플레이 서체는 132px)."""
@@ -162,50 +169,67 @@ class Renderer:
         return img
 
     # ── 페이지 ────────────────────────────────────────────
-    def _accent_line(self, draw: ImageDraw.ImageDraw, xy: tuple[int, int], line: str,
-                     font: ImageFont.FreeTypeFont) -> None:
-        """핵심어(작은따옴표)는 따옴표를 빼고 빨간 자막 박스 위 흰 글씨로, 나머지는 흰 글씨 + 얇은 외곽선."""
-        x, y = xy
-        pad = 14
-        for seg in re.split(r"('[^']*')", line):
-            if not seg:
-                continue
-            hot = seg.startswith("'") and seg.endswith("'") and len(seg) > 2
-            seg = seg.strip("'") if hot else seg.replace("'", "")
-            w = draw.textlength(seg, font=font)
-            if hot:
-                l, tp, r, bt = draw.textbbox((x, y), seg, font=font)
-                draw.rectangle((l - pad, tp - 10, r + pad, bt + 10), fill=ACCENT)
-                draw.text((x, y), seg, font=font, fill="#FFFFFF")
-                x += w + pad
-            else:
-                draw.text((x, y), seg, font=font, fill="#FFFFFF", stroke_width=4, stroke_fill="#000000")
+    def _clean_headline(self, img: Image.Image, lines: list[str], y: int, size: int) -> None:
+        """정치 모드 제목: 흰색 한 가지, 서체 한 가지. 핵심어(작은따옴표)는 굵기 대비 + 가는 밑줄로 강조하고,
+        가독성은 외곽선 대신 부드러운 그림자로 확보한다. 큰 제목이라 행간은 촘촘하게(1.14)."""
+        regular, heavy = self.font(size, "Medium"), self.font(size, "Black")
+        line_h = int(size * 1.14)
+        shadow = Image.new("L", img.size, 0)
+        sd, d = ImageDraw.Draw(shadow), ImageDraw.Draw(img)
+        underline = []
+        runs = []
+        for i, line in enumerate(lines):
+            x, ly = MARGIN_X, y + i * line_h
+            for seg in re.split(r"('[^']*')", line):
+                if not seg:
+                    continue
+                hot = seg.startswith("'") and seg.endswith("'") and len(seg) > 2
+                seg = seg.strip("'") if hot else seg.replace("'", "")
+                f = heavy if hot else regular
+                runs.append(((x, ly), seg, f))
+                w = d.textlength(seg, font=f)
+                if hot:
+                    underline.append((x, ly + int(size * 1.16), x + w, ly + int(size * 1.16) + 5))
                 x += w
+        for xy, seg, f in runs:
+            sd.text((xy[0] + 2, xy[1] + 4), seg, font=f, fill=255)
+        for box in underline:
+            sd.rectangle(box, fill=255)
+        shadow = shadow.filter(ImageFilter.GaussianBlur(9)).point(lambda v: int(v * 0.85))
+        img.paste(Image.new("RGB", img.size, "#000000"), (0, 0), shadow)
+        d = ImageDraw.Draw(img)
+        for xy, seg, f in runs:
+            d.text(xy, seg, font=f, fill="#FFFFFF")
+        for box in underline:
+            d.rectangle(box, fill="#FFFFFF")
 
     def _tag(self, img: Image.Image, text: str) -> None:
-        """왼쪽 위 코너 라벨 (예: '정치 밈', '쉬운 해설')."""
+        """왼쪽 위 코너 라벨 (예: '쉬운 해설'): 흰 알약 + 검정 글씨."""
         draw = ImageDraw.Draw(img)
-        f = self.font(40, "Black")
+        f = self.font(38, "Bold")
         tw = draw.textlength(text, font=f)
-        draw.rounded_rectangle((MARGIN_X - 24, 60, MARGIN_X + tw + 24, 134), radius=14, fill="#E5322D")
-        draw.text((MARGIN_X, 97), text, font=f, fill="#FFFFFF", anchor="lm")
+        draw.rounded_rectangle((MARGIN_X - 26, 62, MARGIN_X + tw + 26, 132), radius=35, fill="#FFFFFF")
+        draw.text((MARGIN_X, 97), text, font=f, fill="#111111", anchor="lm")
 
     def thumbnail(self, headline: str, background: Image.Image, tag: str = "", accent: bool = False) -> Image.Image:
         img = self._shade(background)
         draw = ImageDraw.Draw(img)
         lines = [line.strip() for line in headline.split("\n") if line.strip()][:3] or [headline]
-        font = self._headline_font(draw, lines, bold=accent)
-        line_h = int(font.size * (1.25 if accent else 1.22))
-        y = H - BOTTOM - line_h * len(lines)
-        if self.brand:
-            draw.text((MARGIN_X, y - 30), self.brand, font=self.font(46, "Bold"), fill="#FFFFFF", anchor="ls",
-                      stroke_width=3 if accent else 0, stroke_fill="#000000")
-        for line in lines:
-            if accent:
-                self._accent_line(draw, (MARGIN_X, y), line, font)
-            else:
+        if accent:
+            size = self._clean_size(draw, lines)
+            y = H - BOTTOM - int(size * 1.14) * len(lines)
+            if self.brand:
+                draw.text((MARGIN_X, y - 34), self.brand, font=self.font(40, "Medium"), fill="#FFFFFF", anchor="ls")
+            self._clean_headline(img, lines, y, size)
+        else:
+            font = self._headline_font(draw, lines)
+            line_h = int(font.size * 1.22)
+            y = H - BOTTOM - line_h * len(lines)
+            if self.brand:
+                draw.text((MARGIN_X, y - 30), self.brand, font=self.font(46, "Bold"), fill="#FFFFFF", anchor="ls")
+            for line in lines:
                 draw.text((MARGIN_X, y), line, font=font, fill="#FFFFFF", stroke_width=1, stroke_fill="#000000")
-            y += line_h
+                y += line_h
         if tag:
             self._tag(img, tag)
         return img
@@ -251,13 +275,13 @@ class Renderer:
         """쉬운 해설 카드: 어두운 배경에 소제목 + 본문 + 진행 표시."""
         img = Image.new("RGB", (W, H), "#14161F")
         draw = ImageDraw.Draw(img)
-        draw.text((MARGIN_X, 150), f"{index} / {total}", font=self.font(44, "Bold"), fill="#FF6B63", anchor="ls")
-        tf = self.display(96)
+        draw.text((MARGIN_X, 150), f"{index} / {total}", font=self.font(44, "Bold"), fill="#B9BDC9", anchor="ls")
+        tf = self.font(88, "ExtraBold")
         y = 290
         for line in self._wrap(draw, title, tf, W - 2 * MARGIN_X)[:2]:
             draw.text((MARGIN_X, y), line, font=tf, fill="#FFFFFF")
             y += 112
-        draw.rectangle((MARGIN_X, y + 10, MARGIN_X + 120, y + 18), fill="#E5322D")
+        draw.rectangle((MARGIN_X, y + 10, MARGIN_X + 120, y + 18), fill="#FFFFFF")
         bf = self.font(58, "Bold")
         y += 90
         for line in self._wrap(draw, text, bf, W - 2 * MARGIN_X)[:9]:
@@ -278,15 +302,15 @@ class Renderer:
             img = Image.new("RGB", (W, H), "#1B1B1F")
         draw = ImageDraw.Draw(img)
         cx = W // 2
-        draw.text((cx, 470), lines[0], font=self.display(112), fill="#FFFFFF", anchor="mm")
-        draw.text((cx, 600), lines[1], font=self.display(112), fill="#FF6B63", anchor="mm")
+        draw.text((cx, 470), lines[0], font=self.font(104, "ExtraBold"), fill="#FFFFFF", anchor="mm")
+        draw.text((cx, 600), lines[1], font=self.font(104, "ExtraBold"), fill="#FFFFFF", anchor="mm")
         draw.text((cx, 790), lines[2], font=self.font(54, "Bold"), fill="#FFFFFF", anchor="mm")
         draw.text((cx, 870), lines[3], font=self.font(54, "Bold"), fill="#FFFFFF", anchor="mm")
         if self.brand:
             f = self.font(60, "Black")
             tw = draw.textlength(self.brand, font=f)
-            draw.rounded_rectangle((cx - tw / 2 - 40, 990, cx + tw / 2 + 40, 1100), radius=55, fill=ACCENT)
-            draw.text((cx, 1045), self.brand, font=f, fill="#FFFFFF", anchor="mm")
+            draw.rounded_rectangle((cx - tw / 2 - 40, 990, cx + tw / 2 + 40, 1100), radius=55, fill="#FFFFFF")
+            draw.text((cx, 1045), self.brand, font=f, fill="#111111", anchor="mm")
         draw.text((cx, 1190), "저장 · 공유도 큰 힘이 됩니다", font=self.font(40, "Bold"),
                   fill="#CCCCCC", anchor="mm")
         return img
