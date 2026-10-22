@@ -82,13 +82,16 @@ def run(dry_run: bool) -> int:
             continue
         used: set[str] = set()
         if mode in POLITICAL_MODES:
-            # 정치: 기사 사진 대신 AI 일러스트 (저작권·초상권 문제 회피). 못 만들면 글씨만 있는 표지
+            # 정치: 뉴스 기사 사진 우선 (출처 표기). 못 구하면 일반 장면 AI 사진, 그것도 안 되면 글씨만 있는 표지
             try:
                 card = writer.write(story, notes)
             except WriterRefusal as exc:
                 log.warning("건너뜀 (%s)", exc)
                 continue
-            a = generate_ai_image(ART_STYLE + card.image_a.ai_prompt, s.openai_api_key, s.image_model)
+            a = fetch_article_image(writer.source_urls, story.source or "원문 기사", used)
+            if a is None:
+                log.info("기사 사진 없음 → 일반 장면 AI 사진")
+                a = generate_ai_image(ART_STYLE + card.image_a.ai_prompt, s.openai_api_key, s.image_model)
             if a is None:
                 log.warning("AI 이미지 생성 실패 → 글씨만 있는 표지로 대체")
                 a = typographic_background()

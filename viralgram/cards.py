@@ -283,8 +283,8 @@ class Renderer:
         label_a = card.image_a.label if card.image_a else ""
         label_b = card.image_b.label if card.image_b else ""
         tag = {"satire": "정치 밈", "explainer": "쉬운 해설", "politics": "정치"}.get(mode, "")
-        if tag and a is not None:
-            # 정치 모드: 직접 만든 AI 일러스트(또는 단색 표지)라 잘라서 화면을 꽉 채운다
+        if tag and a is not None and (a.ai or not a.credit):
+            # 정치 모드: AI 장면(또는 단색 표지)은 잘라서 화면을 꽉 채운다. 기사 사진은 자르지 않고 전체를 보여준다
             bg = ImageOps.fit(a.image.convert("RGB"), (W, H), Image.LANCZOS, centering=(0.5, 0.35))
             if a.ai:
                 self._ai_tag(bg, (0, 0, W, H))

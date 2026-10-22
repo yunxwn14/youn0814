@@ -287,7 +287,7 @@ def test_politics_requires_ai_illustration_and_fallback_cover(tmp_path):
     article = ImageSpec(source="article", stock_query="", ai_prompt="", label="")
     base = dict(headline="국감 질의 '6분' 답변은 '40초'\n이게 소통이냐 소환이냐", body="가" * 60, quip="q", hashtags=["#a"],
                 source_credit="출처: 연합뉴스", article_url="", layout="single", image_b=None)
-    assert "AI 일러스트" in validate_card(CardNews(image_a=article, **base), "satire")
+    assert "AI 장면 프롬프트" in validate_card(CardNews(image_a=article, **base), "satire")
     ai = ImageSpec(source="ai", stock_query="", ai_prompt="an empty hall", label="")
     assert validate_card(CardNews(image_a=ai, **base), "satire") == ""
     r = Renderer("fonts/NotoSansKR.ttf", "@x")

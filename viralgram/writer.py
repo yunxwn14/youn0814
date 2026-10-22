@@ -76,9 +76,9 @@ class CardNews(BaseModel):
 
 
 ART_STYLE = (
-    "Clean flat editorial vector illustration, minimal composition, soft muted palette of navy, warm beige, mustard and teal, "
-    "faceless simplified human figures, generous empty space in the lower third, no text, no letters, no numbers, no logos, "
-    "no flags, no real people, no likeness of any politician, no strong red-versus-blue contrast. Scene: "
+    "Photorealistic documentary-style news photograph, natural light, shallow depth of field, generous dark space in the lower third. "
+    "Only generic anonymous scenery or people seen from behind or far away; no identifiable real person, no likeness of any politician, "
+    "no text, no letters, no numbers, no logos, no flags, no party colors. Scene: "
 )
 
 SYSTEM = """당신은 한국 인스타그램 이슈 매거진 계정의 에디터입니다.
@@ -171,9 +171,9 @@ _POLITICS_RULES = """
 - 제목은 자극적이어도 사실을 왜곡하거나 낚지 않습니다. 누가·무엇을·어떻게가 보이게 쓰되 결과를 부풀리지 않습니다.
 - 특정 정당·후보에 대한 투표·지지·비방 호소, 사생활·가족·외모 공격, 혐오 표현은 쓰지 않습니다.
 - 탐정냥 한마디(quip)는 조롱 없는 중립 질문으로 댓글을 유도합니다. 30자 이내 (예: '찬성 vs 반대, 냥심은 어느 쪽?', '여러분 생각은 어떤가옹?').
-- 이미지는 저작권·초상권 문제가 없도록 AI 일러스트만 씁니다: image_a.source 는 반드시 "ai", layout 은 "single", image_b 는 null.
-  ai_prompt(영어)에는 사건을 '상징적으로' 묘사합니다. 일반적인 공간(국회 본회의장 같은 넓은 홀, 회의 테이블)과 상징물(마이크, 서류 더미, 저울, 타이머, 말풍선 없는 빈 연단)을
-  얼굴 없는 단순화된 인물로 그립니다. 실존 인물·특정 정치인 닮은꼴·정당 로고·정당 색 대비·국기·글씨·숫자는 절대 넣지 않습니다.
+- 이미지: 원문 기사 사진이 있으면 image_a.source 는 "article"(실제 현장·인물 사진이 가장 강력함), layout 은 "single", image_b 는 null.
+  기사 사진을 못 구할 때를 대비해 ai_prompt(영어)를 항상 채웁니다: 사건 분위기를 보여주는 '일반적인 장면'(넓은 국회 홀의 뒷모습, 마이크와 서류, 불 켜진 연단)을
+  사실적인 사진 스타일로 묘사하되, 실존 인물·특정 정치인 닮은꼴·정당 로고·국기·글씨는 절대 넣지 않습니다. 실존 인물을 AI로 그리거나 합성하지 않습니다.
   stock_query 는 빈 문자열이어도 됩니다."""
 _WRITE_POLITICS = "오늘은 '정치' 시간입니다. 위 정치 모드 지침을 반드시 지키세요.\n"
 
@@ -195,11 +195,12 @@ _RANK_EXPLAINER = (
 )
 _SATIRE_RULES = """
 [풍자·밈 지침]
-- 제목과 한마디에는 개인 실명을 쓰지 않고 직책·기관으로 씁니다 (예: '야당 대표', '여당 원내대표', '국회 운영위'). 실명은 본문(캡션)에서만 기사 그대로.
+- 실명은 공개된 공적 발언·행동을 사실대로 전할 때만 씁니다. 그 사람 자체(인격·외모·가족)를 조롱하는 표현은 금지합니다.
 - 풍자의 대상은 공개된 발언·정책·행동(사실)이지 사람의 외모·가족·사생활·건강이 아닙니다. 일반 시민·피해자는 절대 조롱하지 않습니다.
 - 웃음은 '사실의 아이러니'에서 만듭니다. 없는 말·없는 일을 지어내거나 과장해 단정하지 않습니다. 숫자·인용은 기사 그대로.
 - 어느 한 진영만 반복해서 겨냥하지 않습니다. 비꼬되 결론을 강요하지 않고, 한마디는 가벼운 밈 말투의 질문·드립으로 댓글을 부릅니다 (예: '질문 6분 답변 40초, 이게 국감 가성비냥', '이 정도면 소통 아니고 소환 아니냥?').
 - 제목은 밈처럼 짧고 리듬 있게, 그러나 누가·무엇을·결과가 한눈에 보여야 합니다. 사실과 어긋나는 낚시 금지.
+- 어그로는 '갈등 구도'를 제목 맨 앞에 세워서 만듭니다: 누가 누구에게 무슨 말/행동을 했는지, 말 vs 행동·약속 vs 결과·숫자 대비를 도발적으로 (예: "'6분' 질문에 '40초' 답변", "'수사 중'이라더니 '2년째' 그대로"). 독자가 한쪽을 고르고 싶게 만드세요.
 - 캡션 본문은 담백한 뉴스체로 사실만 전하고, 풍자는 제목과 한마디에만 둡니다."""
 _EXPLAINER_RULES = """
 [쉬운 해설 지침]
@@ -405,8 +406,8 @@ def validate_card(card: CardNews, mode: str = "") -> str:
     if mode in POLITICAL_MODES:
         if _FAMILY.search(card.headline + card.quip):
             return f"정치인 가족·사생활 소재는 쓰지 않음: {card.headline!r}"
-        if card.image_a.source != "ai" or not card.image_a.ai_prompt.strip():
-            return "정치 모드는 AI 일러스트 프롬프트가 필요함"
+        if not card.image_a.ai_prompt.strip():
+            return "정치 모드는 대체용 AI 장면 프롬프트가 필요함"
         if card.image_b is not None or card.layout != "single":
             return "정치 모드는 single 레이아웃, 이미지 1장만 사용"
     if mode == "explainer" and not 3 <= len(card.steps) <= 5:
@@ -429,7 +430,7 @@ def build_caption(card: CardNews, photo_credits: list[str] | None = None, signof
     if photo_credits:
         credit += "\n사진: " + ", ".join(dict.fromkeys(photo_credits))
         if "AI 생성 이미지" in photo_credits:
-            credit += "\n※ 이미지는 AI로 생성한 일러스트이며 실제 장면이 아닙니다."
+            credit += "\n※ 일부 이미지는 AI로 생성한 이미지이며 실제 장면이 아닙니다."
     parts.append(credit.strip())
     if tags:
         parts.append(" ".join(tags[:max_hashtags]))
