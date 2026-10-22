@@ -250,3 +250,31 @@ def test_politics_mode_feeds_and_rules():
     assert "정치 모드 지침" in w.system and "중립" in w.system
     w.mode = "issue"
     assert w.system == SYSTEM
+
+
+def test_political_mode_satire_weekdays_explainer_sunday_first_post():
+    from datetime import datetime, timedelta, timezone
+    from viralgram.config import resolve_mode
+
+    kst = timezone(timedelta(hours=9))
+    sunday = datetime(2026, 10, 25, 12, 30, tzinfo=kst)
+    assert sunday.weekday() == 6
+    assert resolve_mode("political", sunday, posted_today=0) == "explainer"
+    assert resolve_mode("political", sunday, posted_today=1) == "satire"
+    assert resolve_mode("political", datetime(2026, 10, 26, 12, 30, tzinfo=kst), 0) == "satire"
+    assert resolve_mode("satire") == "satire"
+
+
+def test_explainer_needs_steps_and_renders_pages(tmp_path):
+    from viralgram.writer import CardNews, ExplainStep, ImageSpec, validate_card
+
+    spec = ImageSpec(source="article", stock_query="", ai_prompt="", label="")
+    base = dict(headline="국정감사 '핵심' 쉽게 정리\n여야는 뭐라고 했나", body="가" * 60, quip="q", hashtags=["#a"],
+                source_credit="출처: 연합뉴스", article_url="", layout="single", image_a=spec, image_b=None)
+    assert "해설 카드" in validate_card(CardNews(**base), "explainer")
+    steps = [ExplainStep(title=f"소제목{i}", text="쉬운 설명입니다. " * 4) for i in range(3)]
+    card = CardNews(**base, steps=steps)
+    assert validate_card(card, "explainer") == ""
+    r = Renderer("fonts/NotoSansKR.ttf", "@x")
+    paths = r.render(card, tmp_path, Photo(Image.new("RGB", (1200, 800), "#446"), "A"), None, [None], mode="explainer")
+    assert len(paths) == 1 + 3 + 1  # 썸네일 + 해설 3장 + 팔로우

@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from .cards import Renderer
 from .config import Settings, resolve_mode
@@ -15,7 +15,7 @@ from .instagram import Instagram, InstagramError
 from .reels import make_reel, pick_music
 from .photos import fetch_article_image, resolve
 from .sources import feeds_for, fetch_candidates
-from .writer import Writer, WriterRefusal, build_caption
+from .writer import POLITICAL_MODES, Writer, WriterRefusal, build_caption
 
 log = logging.getLogger("viralgram")
 
@@ -59,8 +59,9 @@ def run(dry_run: bool) -> int:
     s = Settings.from_env()
     history = History(s.history_path)
 
-    mode = resolve_mode(s.post_mode)
-    log.info("게시 모드: %s", "웃긴 이야기" if mode == "funny" else "이슈")
+    today = datetime.now(timezone(timedelta(hours=9))).date()
+    mode = resolve_mode(s.post_mode, posted_today=history.posted_on(today))
+    log.info("게시 모드: %s", mode)
     stories = fetch_candidates(feeds_for(mode), exclude_ids=history.ids)
     if not stories:
         log.error("새 후보가 없습니다.")
@@ -76,7 +77,7 @@ def run(dry_run: bool) -> int:
         except WriterRefusal as exc:
             log.warning("건너뜀 (%s)", exc)
             continue
-        if mode == "politics" and len(writer.source_urls) < 2:
+        if mode in POLITICAL_MODES and len(writer.source_urls) < 2:
             log.warning("건너뜀 (정치 사안인데 같은 내용을 보도한 기사가 2곳 미만): %s", story.title)
             continue
         # 기사 사진이 구해지는 이야기만 쓴다 (원고 쓰기 전에 확인해 비용 절약)
@@ -100,9 +101,11 @@ def run(dry_run: bool) -> int:
     out_dir = s.output_dir / folder
     ig = Instagram(s.ig_user_id, s.ig_access_token, s.ig_graph_host, s.ig_graph_version) if s.ig_access_token else None
     brand = s.brand_handle or (ig.username if ig else "")
-    images = Renderer(s.font_path, brand).render(card, out_dir, a, b, [extra])
+    images = Renderer(s.font_path, brand).render(card, out_dir, a, b, [extra], mode=mode)
     used = [p for p in (a, b, extra) if p]
-    caption = build_caption(card, [p.credit for p in used], s.caption_signoff)
+    political = mode in POLITICAL_MODES
+    caption = build_caption(card, [p.credit for p in used], "" if political else s.caption_signoff,
+                            quip_label="💬 한마디" if political else "🐾 탐정냥 한마디")
     (out_dir / "caption.txt").write_text(caption, encoding="utf-8")
 
     if dry_run:

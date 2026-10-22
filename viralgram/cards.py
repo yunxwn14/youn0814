@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps, ImageStat
@@ -155,7 +156,26 @@ class Renderer:
         return img
 
     # ── 페이지 ────────────────────────────────────────────
-    def thumbnail(self, headline: str, background: Image.Image) -> Image.Image:
+    def _accent_line(self, draw: ImageDraw.ImageDraw, xy: tuple[int, int], line: str,
+                     font: ImageFont.FreeTypeFont) -> None:
+        """작은따옴표로 감싼 핵심어를 노란색으로 강조해 그린다."""
+        x, y = xy
+        for seg in re.split(r"('[^']*')", line):
+            if not seg:
+                continue
+            color = "#FFD84D" if seg.startswith("'") and seg.endswith("'") and len(seg) > 2 else "#FFFFFF"
+            draw.text((x, y), seg, font=font, fill=color, stroke_width=1, stroke_fill="#000000")
+            x += draw.textlength(seg, font=font)
+
+    def _tag(self, img: Image.Image, text: str) -> None:
+        """왼쪽 위 코너 라벨 (예: '정치 밈', '쉬운 해설')."""
+        draw = ImageDraw.Draw(img)
+        f = self.font(40, "Black")
+        tw = draw.textlength(text, font=f)
+        draw.rounded_rectangle((MARGIN_X - 24, 60, MARGIN_X + tw + 24, 134), radius=14, fill="#E5322D")
+        draw.text((MARGIN_X, 97), text, font=f, fill="#FFFFFF", anchor="lm")
+
+    def thumbnail(self, headline: str, background: Image.Image, tag: str = "", accent: bool = False) -> Image.Image:
         img = self._shade(background)
         draw = ImageDraw.Draw(img)
         lines = [line.strip() for line in headline.split("\n") if line.strip()][:3] or [headline]
@@ -165,19 +185,33 @@ class Renderer:
         if self.brand:
             draw.text((MARGIN_X, y - 30), self.brand, font=self.font(46, "Bold"), fill="#FFFFFF", anchor="ls")
         for line in lines:
-            draw.text((MARGIN_X, y), line, font=font, fill="#FFFFFF", stroke_width=1, stroke_fill="#000000")
+            if accent:
+                self._accent_line(draw, (MARGIN_X, y), line, font)
+            else:
+                draw.text((MARGIN_X, y), line, font=font, fill="#FFFFFF", stroke_width=1, stroke_fill="#000000")
             y += line_h
+        if tag:
+            self._tag(img, tag)
         return img
 
     def _wrap(self, draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, width: int) -> list[str]:
+        """어절 단위로 줄바꿈 (한 어절이 폭보다 길면 글자 단위로)."""
         lines, cur = [], ""
-        for ch in text.strip():
-            if draw.textlength(cur + ch, font=font) > width and cur:
-                lines.append(cur.strip())
-                cur = ch
-            else:
-                cur += ch
-        return lines + ([cur.strip()] if cur.strip() else [])
+        for word in text.split():
+            trial = f"{cur} {word}".strip()
+            if draw.textlength(trial, font=font) <= width:
+                cur = trial
+                continue
+            if cur:
+                lines.append(cur)
+                cur = ""
+            for ch in word:
+                if draw.textlength(cur + ch, font=font) > width and cur:
+                    lines.append(cur)
+                    cur = ch
+                else:
+                    cur += ch
+        return lines + ([cur] if cur else [])
 
     def plain(self, photo: Photo, quip: str = "") -> Image.Image:
         """글씨 없는 사진 페이지. 가로 사진이라 아래 여백이 크면 탐정냥 한마디를 그 자리에 넣는다."""
@@ -197,7 +231,28 @@ class Renderer:
                 y += 74
         return img
 
-    def follow_card(self, background: Image.Image | None = None) -> Image.Image:
+    def explain_page(self, title: str, text: str, index: int, total: int) -> Image.Image:
+        """쉬운 해설 카드: 어두운 배경에 소제목 + 본문 + 진행 표시."""
+        img = Image.new("RGB", (W, H), "#14161F")
+        draw = ImageDraw.Draw(img)
+        draw.text((MARGIN_X, 150), f"{index} / {total}", font=self.font(44, "Bold"), fill="#FFD84D", anchor="ls")
+        tf = self.font(88, "Black")
+        y = 290
+        for line in self._wrap(draw, title, tf, W - 2 * MARGIN_X)[:2]:
+            draw.text((MARGIN_X, y), line, font=tf, fill="#FFFFFF")
+            y += 112
+        draw.rectangle((MARGIN_X, y + 10, MARGIN_X + 120, y + 18), fill="#E5322D")
+        bf = self.font(58, "Bold")
+        y += 90
+        for line in self._wrap(draw, text, bf, W - 2 * MARGIN_X)[:9]:
+            draw.text((MARGIN_X, y), line, font=bf, fill="#E8E8EE")
+            y += 88
+        if self.brand:
+            draw.text((MARGIN_X, H - 90), self.brand, font=self.font(40, "Bold"), fill="#8A8FA3", anchor="ls")
+        return img
+
+    def follow_card(self, background: Image.Image | None = None,
+                    lines: tuple[str, str, str, str] = ("다음 사건도", "놓치지 마세요", "팔로우하고 매일 새로운", "화제 이슈 소식 받아보기")) -> Image.Image:
         """마지막 장: 팔로우 부탁. 배경은 썸네일 사진을 흐리게 깔거나 단색."""
         if background is not None and ImageStat.Stat(ImageOps.grayscale(background.resize((64, 64)))).stddev[0] > 25:
             img = ImageEnhance.Brightness(
@@ -207,10 +262,10 @@ class Renderer:
             img = Image.new("RGB", (W, H), "#1B1B1F")
         draw = ImageDraw.Draw(img)
         cx = W // 2
-        draw.text((cx, 470), "다음 사건도", font=self.font(104, "Black"), fill="#FFFFFF", anchor="mm")
-        draw.text((cx, 600), "놓치지 마세요", font=self.font(104, "Black"), fill="#FFD84D", anchor="mm")
-        draw.text((cx, 790), "팔로우하고 매일 새로운", font=self.font(54, "Bold"), fill="#FFFFFF", anchor="mm")
-        draw.text((cx, 870), "화제 이슈 소식 받아보기", font=self.font(54, "Bold"), fill="#FFFFFF", anchor="mm")
+        draw.text((cx, 470), lines[0], font=self.font(104, "Black"), fill="#FFFFFF", anchor="mm")
+        draw.text((cx, 600), lines[1], font=self.font(104, "Black"), fill="#FFD84D", anchor="mm")
+        draw.text((cx, 790), lines[2], font=self.font(54, "Bold"), fill="#FFFFFF", anchor="mm")
+        draw.text((cx, 870), lines[3], font=self.font(54, "Bold"), fill="#FFFFFF", anchor="mm")
         if self.brand:
             f = self.font(60, "Black")
             tw = draw.textlength(self.brand, font=f)
@@ -221,16 +276,24 @@ class Renderer:
         return img
 
     def render(self, card: CardNews, out_dir: Path, a: Photo | None, b: Photo | None = None,
-               extras: list[Photo | None] | None = None) -> list[Path]:
+               extras: list[Photo | None] | None = None, mode: str = "") -> list[Path]:
         """1장: 레이아웃대로 a·b 를 배치한 썸네일. 이후: 글씨 없는 사진들 (b, extras 중 썸네일에 안 쓴 것)."""
         out_dir.mkdir(parents=True, exist_ok=True)
         layout = card.layout if b is not None else "single"
         label_a = card.image_a.label if card.image_a else ""
         label_b = card.image_b.label if card.image_b else ""
-        pages = [self.thumbnail(card.headline, self.compose(layout, a, b, label_a, label_b))]
-        for photo in [p for p in (extras or []) if p][:1]:
-            pages.append(self.plain(photo, card.quip))
-        pages.append(self.follow_card(a.image if a else None))
+        tag = {"satire": "정치 밈", "explainer": "쉬운 해설", "politics": "정치"}.get(mode, "")
+        pages = [self.thumbnail(card.headline, self.compose(layout, a, b, label_a, label_b), tag, accent=bool(tag))]
+        if mode == "explainer" and card.steps:
+            steps = card.steps[:4]
+            pages += [self.explain_page(s.title, s.text, i, len(steps)) for i, s in enumerate(steps, 1)]
+        else:
+            for photo in [p for p in (extras or []) if p][:1]:
+                pages.append(self.plain(photo, card.quip))
+        follow = {"satire": ("정치, 웃기게", "읽어드려요", "팔로우하고 매일 새로운", "정치 밈·해설 받아보기"),
+                  "explainer": ("정치, 쉽게", "읽어드려요", "팔로우하고 매주 일요일", "쉬운 정치 해설 받아보기"),
+                  "politics": ("오늘의 정치", "한눈에", "팔로우하고 매일 새로운", "정치 이슈 받아보기")}.get(mode)
+        pages.append(self.follow_card(a.image if a else None, follow) if follow else self.follow_card(a.image if a else None))
         paths = []
         for i, page in enumerate(pages, 1):
             path = out_dir / f"{i:02d}.jpg"

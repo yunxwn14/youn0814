@@ -80,7 +80,7 @@ DEFAULT_FEEDS = ISSUE_FEEDS + FUNNY_FEEDS
 
 
 def feeds_for(mode: str) -> list[tuple[str, str]]:
-    return {"funny": FUNNY_FEEDS, "politics": POLITICS_FEEDS}.get(mode, ISSUE_FEEDS)
+    return {"funny": FUNNY_FEEDS, "politics": POLITICS_FEEDS, "satire": POLITICS_FEEDS, "explainer": POLITICS_FEEDS}.get(mode, ISSUE_FEEDS)
 
 
 @dataclass

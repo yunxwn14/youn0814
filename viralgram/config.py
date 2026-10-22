@@ -27,12 +27,19 @@ def _bool(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def resolve_mode(mode: str, now: datetime | None = None) -> str:
-    """auto 면 한국시간 17시 전(12:27 게시)은 이슈, 이후(20:57 게시)는 웃긴 글."""
-    if mode in {"issue", "funny", "politics"}:
+KST = timezone(timedelta(hours=9))
+
+
+def resolve_mode(mode: str, now: datetime | None = None, posted_today: int = 0) -> str:
+    """주제 결정.
+    political: 평소엔 풍자·밈(satire), 한국시간 일요일의 첫 게시만 쉬운 해설(explainer)
+    auto: 한국시간 17시 전은 이슈, 이후는 웃긴 글 (이슈/웃김 계정용)"""
+    now = (now or datetime.now(KST)).astimezone(KST)
+    if mode == "political":
+        return "explainer" if now.weekday() == 6 and posted_today == 0 else "satire"
+    if mode in {"issue", "funny", "politics", "satire", "explainer"}:
         return mode
-    now = now or datetime.now(timezone(timedelta(hours=9)))
-    return "issue" if now.astimezone(timezone(timedelta(hours=9))).hour < 17 else "funny"
+    return "issue" if now.hour < 17 else "funny"
 
 
 @dataclass
@@ -59,7 +66,7 @@ class Settings:
     font_path: str = ""
     brand_handle: str = ""
     caption_signoff: str = "탐정냥의 사건 보고 끝 🐾"
-    post_mode: str = "auto"  # issue(이슈) | funny(웃긴 글) | politics(정치) | auto(한국시간 낮=이슈, 저녁=웃긴 글)
+    post_mode: str = "auto"  # issue(이슈) | funny(웃긴 글) | politics(정치 뉴스) | satire | explainer | political(평일 풍자 + 일요일 해설) | auto(한국시간 낮=이슈, 저녁=웃긴 글)
     post_reels: bool = True  # 사진 게시물과 같은 내용을 릴스(슬라이드쇼 영상)로도 자동 게시 (POST_REELS=false 로 끔). music/ 폴더에 음원이 있으면 배경음악으로 깔림
 
     history_path: Path = Path("data/posted.json")

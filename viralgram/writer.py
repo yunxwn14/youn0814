@@ -39,6 +39,11 @@ class ImageSpec(BaseModel):
     label: str = Field(description="compare 레이아웃일 때 이미지 위에 붙일 짧은 라벨 (예: '1799년', '전', '후'). 아니면 빈 문자열")
 
 
+class ExplainStep(BaseModel):
+    title: str = Field(description="해설 카드 소제목, 12자 이내 (예: '국정감사가 뭐냐면')")
+    text: str = Field(description="쉬운 말로 2~3문장, 70자 안팎. 어려운 용어는 풀어서")
+
+
 class CardNews(BaseModel):
     headline: str = Field(
         description="썸네일 제목. 정확히 2줄, 줄 사이는 '\\n'. 각 줄 15자 안팎. 핵심 키워드는 작은따옴표로 강조 "
@@ -48,6 +53,10 @@ class CardNews(BaseModel):
     quip: str = Field(
         description="탐정냥(고양이 탐정 캐릭터)의 재치 있는 한마디. 친근한 반말·음슴체, 30자 이내, 드립·말장난·공감 개그. "
         "피해자·약자를 조롱하지 말 것 (예: '냥탐정도 이건 예상 못 했다옹', '범인은 바로… 빨랫줄 욕심이었음')"
+    )
+    steps: list[ExplainStep] = Field(
+        default_factory=list,
+        description="쉬운 해설 모드일 때만 3~4개의 해설 카드(배경 → 쟁점 → 양측 입장 → 한 줄 정리). 그 외에는 빈 리스트",
     )
     hashtags: list[str] = Field(description="'#'으로 시작하는 해시태그 3~6개")
     source_credit: str = Field(description="출처 표기, 예: '출처: 연합뉴스'")
@@ -158,6 +167,38 @@ _POLITICS_RULES = """
 - 정치인 얼굴을 AI로 그리지 않습니다. 메인 이미지는 항상 기사 사진(article)."""
 _WRITE_POLITICS = "오늘은 '정치' 시간입니다. 위 정치 모드 지침을 반드시 지키세요.\n"
 
+POLITICAL_MODES = {"politics", "satire", "explainer"}
+
+_RANK_SATIRE = (
+    "오늘은 '정치 풍자·밈' 시간입니다. 아래 후보 중 20~30대가 'ㅋㅋㅋ 이거 실화?' 하며 공유하고 댓글을 달 만한 이야기를 "
+    "골라 순위를 매겨주세요.\n"
+    "풍자가 잘 되는 소재: ① 말과 행동이 어긋난 아이러니(발언 vs 실제, 약속 vs 결과) ② 숫자로 보이는 황당함(질의 6분·답변 40초, "
+    "예산 규모) ③ 국감·국회에서 나온 어이없는 장면·문답 ④ 정책이 일상에 닿았을 때의 웃픈 현실.\n"
+    "진영 균형: 최근 게시물이 한쪽 진영을 겨냥했다면 이번에는 다른 쪽이나 진영과 무관한 소재(제도·관행·정부 전체)를 우대하세요.\n"
+    "제외: 사생활·가족·외모·건강 소재, 사망·재난·피해자가 있는 사건, 혐오·비하가 핵심인 글, 언론 확인이 안 되는 루머, 단순 일정 안내.\n"
+)
+_RANK_EXPLAINER = (
+    "오늘은 '쉬운 정치 해설' 시간입니다. 아래 후보 중 '이게 무슨 말이야?' 하고 궁금해할 사람이 많은, 지금 화제인 "
+    "제도·정책·절차(국정감사, 예산안, 법안, 선거제도, 탄핵·특검 절차 등)와 연결된 이야기를 골라 순위를 매겨주세요.\n"
+    "특정 인물 공격이 아니라 '구조를 이해시키는' 소재, 양측 입장이 분명한 소재를 우대하세요.\n"
+    "제외: 루머, 사생활·가족 소재, 혐오·비하가 핵심인 글, 단순 일정 안내.\n"
+)
+_SATIRE_RULES = """
+[풍자·밈 지침]
+- 풍자의 대상은 공개된 발언·정책·행동(사실)이지 사람의 외모·가족·사생활·건강이 아닙니다. 일반 시민·피해자는 절대 조롱하지 않습니다.
+- 웃음은 '사실의 아이러니'에서 만듭니다. 없는 말·없는 일을 지어내거나 과장해 단정하지 않습니다. 숫자·인용은 기사 그대로.
+- 어느 한 진영만 반복해서 겨냥하지 않습니다. 비꼬되 결론을 강요하지 않고, 한마디는 가벼운 밈 말투의 질문·드립으로 댓글을 부릅니다 (예: '질문 6분 답변 40초, 이게 국감 가성비냥', '이 정도면 소통 아니고 소환 아니냥?').
+- 제목은 밈처럼 짧고 리듬 있게, 그러나 누가·무엇을·결과가 한눈에 보여야 합니다. 사실과 어긋나는 낚시 금지.
+- 캡션 본문은 담백한 뉴스체로 사실만 전하고, 풍자는 제목과 한마디에만 둡니다."""
+_EXPLAINER_RULES = """
+[쉬운 해설 지침]
+- 정치를 모르는 사람도 이해하게 써요. 용어는 풀어 쓰고(예: 국정감사 = 국회가 정부 기관이 일을 잘했는지 점검하는 연례 절차), 비유는 정확한 선에서만.
+- steps 에 3~4장: ① 이게 뭐냐면(배경·용어) ② 지금 무슨 일이냐면(핵심 쟁점) ③ 양측은 이렇게 말해요(여야·관련 당사자 각각) ④ 한 줄 정리. 각 장은 소제목 + 쉬운 말 2~3문장.
+- 어느 쪽도 편들지 않고 사실과 입장만 정리합니다. 평가·결론을 내리지 않습니다.
+- 썸네일 제목은 '쉬운 해설' 느낌으로 질문형·풀이형이어도 되지만 핵심(무엇에 대한 해설인지)을 숨기지 않습니다."""
+_WRITE_SATIRE = "오늘은 '정치 풍자·밈' 시간입니다. 위 정치 모드 지침과 풍자·밈 지침을 반드시 지키세요. steps 는 빈 리스트로 두세요.\n"
+_WRITE_EXPLAINER = "오늘은 '쉬운 정치 해설' 시간입니다. 위 정치 모드 지침과 쉬운 해설 지침을 반드시 지키고 steps 를 3~4개 채우세요.\n"
+
 _WRITE_FUNNY = (
     "오늘은 '웃긴 이야기' 시간입니다. 썸네일 제목은 웃긴 상황·반전이 한눈에 보이게, 탐정냥 한마디는 "
     "더 과감하게 드립을 치세요 (조롱·비하 없이 상황 자체를 웃기게).\n"
@@ -175,7 +216,10 @@ class Writer:
 
     @property
     def system(self) -> str:
-        return SYSTEM + _POLITICS_RULES if self.mode == "politics" else SYSTEM
+        if self.mode not in POLITICAL_MODES:
+            return SYSTEM
+        extra = {"satire": _SATIRE_RULES, "explainer": _EXPLAINER_RULES}.get(self.mode, "")
+        return SYSTEM + _POLITICS_RULES + extra
 
     # ── 1) 후보 선정 ─────────────────────────────────────
     def rank(self, stories: list[Story], recent_titles: list[str], mode: str = "issue") -> list[Story]:
@@ -193,7 +237,7 @@ class Writer:
                 {
                     "role": "user",
                     "content": (
-                        {"funny": _RANK_FUNNY, "politics": _RANK_POLITICS}.get(mode, _RANK_ISSUE)
+                        {"funny": _RANK_FUNNY, "politics": _RANK_POLITICS, "satire": _RANK_SATIRE, "explainer": _RANK_EXPLAINER}.get(mode, _RANK_ISSUE)
                         + "밋밋한 미담, 기업·지자체 홍보성 기사, 정책 발표, 정보가 너무 적어 이야기가 안 되는 후보는 제외하세요.\n"
                         "최근 게시물과 비슷한 소재는 피해주세요.\n\n"
                         f"## 최근 게시한 제목\n{recent}\n\n## 후보\n{listing}"
@@ -221,7 +265,7 @@ class Writer:
                     "제목이 '이것', '이렇게'처럼 핵심을 숨겼다면 그게 정확히 무엇인지 반드시 밝혀주세요.\n"
                     "누가/무엇을/얼마나/왜/결말, 사람들 반응, 매체명, 원문 기사 URL 을 짧은 bullet 로.\n"
                     + ("정치 사안이므로 여러 언론이 같은 내용을 보도했는지, 여야·관련 당사자 각각의 입장과 해명·반박, "
-                       "확정된 사실과 의혹 단계의 내용을 구분해 정리하세요.\n" if self.mode == "politics" else "")
+                       "확정된 사실과 의혹 단계의 내용을 구분해 정리하세요.\n" if self.mode in POLITICAL_MODES else "")
                     + "\n"
                     f"제목: {story.title}\n요약: {story.summary}\n출처: {story.source}\n링크: {story.link}"
                 ),
@@ -283,7 +327,7 @@ class Writer:
                     "content": (
                         "아래 이야기로 인스타그램 게시물(썸네일 제목 + 짧은 캡션)을 써주세요.\n"
                         f"이 이야기는 {story.region} 소식입니다.\n"
-                        + {"funny": _WRITE_FUNNY, "politics": _WRITE_POLITICS}.get(self.mode, "")
+                        + {"funny": _WRITE_FUNNY, "politics": _WRITE_POLITICS, "satire": _WRITE_SATIRE, "explainer": _WRITE_EXPLAINER}.get(self.mode, "")
                         + "\n"
                         f"## 원문 정보\n제목: {story.title}\n요약: {story.summary}\n"
                         f"매체: {story.source}\n링크: {story.link}\n\n"
@@ -302,7 +346,7 @@ class Writer:
         problem = ""
         for _ in range(attempts):
             card = self._write_once(story, notes)
-            problem = validate_card(card)
+            problem = validate_card(card, self.mode)
             if not problem:
                 return card
             log.warning("원고 검사 실패, 다시 작성: %s", problem)
@@ -324,7 +368,7 @@ _ALLOWED = re.compile(r"^[가-힣ㄱ-ㅎa-zA-Z0-9\s'\"‘’“”.,!?·…~%&()
 _VAGUE = re.compile(r"이것|이거|이렇게|그것|충격 행동|충격적인 행동|그 이유")
 
 
-def validate_card(card: CardNews) -> str:
+def validate_card(card: CardNews, mode: str = "") -> str:
     """문제가 있으면 이유를, 없으면 빈 문자열을 반환."""
     lines = [line for line in card.headline.split("\n") if line.strip()]
     if not 1 <= len(lines) <= 3:
@@ -344,11 +388,13 @@ def validate_card(card: CardNews) -> str:
             return "무료 사진 검색어가 비어 있음"
     if card.layout != "single" and card.image_b is None:
         return f"{card.layout} 레이아웃인데 두 번째 이미지가 없음"
+    if mode == "explainer" and not 3 <= len(card.steps) <= 5:
+        return f"해설 카드 수 이상 ({len(card.steps)}장, 3~4장 필요)"
     return ""
 
 
 def build_caption(card: CardNews, photo_credits: list[str] | None = None, signoff: str = "",
-                  max_hashtags: int = 8) -> str:
+                  max_hashtags: int = 8, quip_label: str = "🐾 탐정냥 한마디") -> str:
     """인스타 캡션: [제목] + 본문 + 맺음말 + 출처 + 해시태그 (2,200자 제한)."""
     tags = []
     for tag in card.hashtags:
@@ -357,7 +403,7 @@ def build_caption(card: CardNews, photo_credits: list[str] | None = None, signof
             tags.append(tag)
     title = " ".join(line.strip() for line in card.headline.split("\n") if line.strip())
     quip = card.quip.strip()
-    parts = [f"[{title}]", card.body.strip(), f"🐾 탐정냥 한마디: {quip}" if quip else "", signoff.strip()]
+    parts = [f"[{title}]", card.body.strip(), f"{quip_label}: {quip}" if quip else "", signoff.strip()]
     credit = card.source_credit.strip()
     if photo_credits:
         credit += "\n사진: " + ", ".join(dict.fromkeys(photo_credits))

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 MAX_ENTRIES = 1000
@@ -22,6 +22,14 @@ class History:
 
     def recent_titles(self, n: int = 30) -> list[str]:
         return [e["title"] for e in self.entries[-n:]]
+
+    def posted_on(self, day) -> int:
+        """한국시간 기준 day(date)에 게시한 건수."""
+        kst = timezone(timedelta(hours=9))
+        return sum(
+            1 for e in self.entries
+            if datetime.fromisoformat(e["posted_at"]).astimezone(kst).date() == day
+        )
 
     def add(self, story_id: str, title: str, link: str, media_id: str | None) -> None:
         self.entries.append(
